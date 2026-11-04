@@ -1,0 +1,27 @@
+package app.theia.android.capture
+
+import android.content.ContentResolver
+import android.net.Uri
+import android.media.ExifInterface
+import app.theia.domain.model.CaptureRecipe
+import org.json.JSONObject
+
+/** Writes a small, versioned recipe to JPEG EXIF when the provider supports updates. */
+fun writeRecipeMetadata(contentResolver: ContentResolver, photoUri: Uri, recipe: CaptureRecipe): Boolean =
+    runCatching {
+        val descriptor = requireNotNull(contentResolver.openFileDescriptor(photoUri, "rw"))
+        descriptor.use {
+            val exif = ExifInterface(it.fileDescriptor)
+            exif.setAttribute(
+                ExifInterface.TAG_USER_COMMENT,
+                JSONObject()
+                    .put("version", 1)
+                    .put("recipe", recipe.id.value)
+                    .put("body", recipe.bodyId.value)
+                    .put("lens", recipe.lensId.value)
+                    .put("film", recipe.filmStockId.value)
+                    .toString(),
+            )
+            exif.saveAttributes()
+        }
+    }.isSuccess

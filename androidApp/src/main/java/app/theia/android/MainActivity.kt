@@ -1,155 +1,367 @@
 package app.theia.android
 
+import android.net.Uri
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import android.os.LocaleList
+import android.app.LocaleManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
-import app.theia.domain.model.CameraBodyId
+import androidx.compose.ui.unit.dp
+import app.theia.android.capture.CameraCaptureScreen
+import app.theia.android.capture.VideoCaptureScreen
+import app.theia.android.capture.writeRecipeMetadata
+import app.theia.android.album.AlbumLabScreen
+import app.theia.android.album.AlbumMediaKind
+import app.theia.android.album.AlbumMetadataRepository
+import app.theia.android.album.AlbumPhoto
+import app.theia.android.settings.AndroidUserPreferencesStore
+import app.theia.android.settings.OnboardingScreen
+import app.theia.android.settings.SettingsScreen
+import app.theia.android.settings.openApplicationPermissionSettings
+import app.theia.android.workbench.WorkbenchScreen
+import app.theia.android.roll.AndroidFilmRollRepository
+import app.theia.android.roll.AndroidFilmRollService
+import app.theia.android.geotag.AndroidGeotagService
+import app.theia.android.geotag.AndroidPermissionPort
+import app.theia.domain.catalog.BuiltInEquipmentCatalog
 import app.theia.domain.model.CaptureRecipe
-import app.theia.domain.model.FilmStockId
-import app.theia.domain.model.LensId
+import app.theia.domain.model.FilmRollCapacity
+import app.theia.domain.model.PermissionState
+import app.theia.domain.model.PermissionStatus
+import app.theia.domain.model.UserPreferences
+import app.theia.domain.port.DevicePermission
+import androidx.core.content.ContextCompat
+import android.widget.Toast
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CompletableDeferred
 
-private val SolarGold = Color(0xFFEAAE35)
-private val DeepSky = Color(0xFF182344)
-private val CosmicViolet = Color(0xFF2D2D57)
-private val Ivory = Color(0xFFE7D7B7)
-private val NearBlack = Color(0xFF121522)
+private enum class AppDestination { ONBOARDING, CAMERA, VIDEO, WORKBENCH, ALBUM, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { TheiaSmokeTestScreen() }
+        setContent { TheiaAppScreen() }
     }
 }
 
 @Composable
-private fun TheiaSmokeTestScreen() {
-    val recipe = remember {
-        CaptureRecipe(
-            bodyId = CameraBodyId("body-default"),
-            lensId = LensId("lens-default"),
-            filmStockId = FilmStockId("film-default"),
-        )
+private fun TheiaAppScreen() {
+    val context = LocalContext.current
+    val preferencesStore = remember(context) { AndroidUserPreferencesStore(context) }
+    val albumRepository = remember(context) { AlbumMetadataRepository(context) }
+    val rollRepository = remember(context) { AndroidFilmRollRepository(context) }
+    val rollService = remember(context, albumRepository, rollRepository) {
+        AndroidFilmRollService(context, albumRepository, rollRepository)
     }
-    var message by remember { mutableStateOf(R.string.shared_domain_loaded) }
-
-    MaterialTheme {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = NearBlack,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(DeepSky)
-                    .padding(horizontal = 28.dp, vertical = 36.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = "Θ",
-                    color = SolarGold,
-                    fontSize = 72.sp,
-                    lineHeight = 76.sp,
-                    fontWeight = FontWeight.Light,
-                )
-                Text(
-                    text = "Théia",
-                    color = Ivory,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = stringResource(R.string.android_development_build),
-                    color = SolarGold,
-                    fontSize = 12.sp,
-                    letterSpacing = 2.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(36.dp))
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(CosmicViolet, RoundedCornerShape(24.dp))
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.Start,
-                ) {
-                    Text(
-                        text = stringResource(R.string.shared_foundation),
-                        color = Ivory,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(R.string.capture_recipe),
-                        color = SolarGold,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = recipe.id.value,
-                        color = Ivory,
-                        fontSize = 11.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = stringResource(message),
-                        color = Ivory,
-                        fontSize = 14.sp,
-                    )
-                    Spacer(Modifier.height(18.dp))
-                    Button(
-                        onClick = { message = R.string.recipe_validated },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = SolarGold,
-                            contentColor = NearBlack,
-                        ),
-                    ) {
-                        Text(stringResource(R.string.test_shared_recipe))
-                    }
-                }
-
-                Spacer(Modifier.height(22.dp))
-                Text(
-                    text = stringResource(R.string.camera_not_implemented),
-                    color = Ivory.copy(alpha = 0.75f),
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center,
-                )
+    val coroutineScope = rememberCoroutineScope()
+    var preferences by remember(preferencesStore) { mutableStateOf(preferencesStore.load()) }
+    var hasCompletedOnboarding by remember(preferencesStore) { mutableStateOf(preferencesStore.hasCompletedOnboarding()) }
+    var permissionRefresh by remember { mutableStateOf(0) }
+    var pendingPermissionResult by remember { mutableStateOf<CompletableDeferred<PermissionStatus>?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        permissionRefresh++
+        pendingPermissionResult?.complete(if (it) PermissionStatus.GRANTED else PermissionStatus.DENIED)
+        pendingPermissionResult = null
+    }
+    val requestDevicePermission: suspend (DevicePermission) -> PermissionStatus = remember(context, permissionLauncher) {
+        { permission ->
+            val manifestPermission = permission.manifestPermission()
+            if (ContextCompat.checkSelfPermission(context, manifestPermission) == PackageManager.PERMISSION_GRANTED) {
+                PermissionStatus.GRANTED
+            } else {
+                context.getSharedPreferences("theia_permission_requests", Context.MODE_PRIVATE)
+                    .edit().putBoolean(manifestPermission, true).apply()
+                val result = CompletableDeferred<PermissionStatus>()
+                pendingPermissionResult = result
+                permissionLauncher.launch(manifestPermission)
+                result.await()
             }
         }
+    }
+    val permissionPort = remember(context, requestDevicePermission) {
+        AndroidPermissionPort(context, requestDevicePermission)
+    }
+    val geotagService = remember(context, permissionPort) { AndroidGeotagService(context, permissionPort) }
+    val initialRecipe = remember {
+        CaptureRecipe(
+            bodyId = BuiltInEquipmentCatalog.cameraBodies().first().id,
+            lensId = BuiltInEquipmentCatalog.lenses().first().id,
+            filmStockId = BuiltInEquipmentCatalog.filmStocks().first().id,
+        )
+    }
+    var recipe by remember { mutableStateOf(initialRecipe) }
+    var destination by remember { mutableStateOf(if (hasCompletedOnboarding) AppDestination.CAMERA else AppDestination.ONBOARDING) }
+    var latestPhoto by remember { mutableStateOf<Uri?>(null) }
+    var latestPhotoVisible by remember { mutableStateOf(false) }
+    var remainingExposures by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(destination, rollService) {
+        if (destination == AppDestination.CAMERA) {
+            val activeRoll = rollService.activeRoll()
+            if (activeRoll != null) {
+                recipe = activeRoll.recipe
+                remainingExposures = activeRoll.roll.capacity.exposures - activeRoll.roll.photoIds.size
+            } else {
+                remainingExposures = null
+            }
+            val photoId = latestPhoto?.toString()
+            latestPhotoVisible = photoId != null && photoId in rollService.visiblePhotoIds()
+        }
+    }
+
+    BackHandler(destination != AppDestination.CAMERA) {
+        if (destination == AppDestination.ONBOARDING) {
+            preferencesStore.markOnboardingCompleted()
+            hasCompletedOnboarding = true
+        }
+        destination = AppDestination.CAMERA
+    }
+
+    MaterialTheme {
+        Surface(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+            when (destination) {
+                AppDestination.ONBOARDING -> OnboardingScreen(
+                    onGetStarted = {
+                        preferencesStore.markOnboardingCompleted()
+                        hasCompletedOnboarding = true
+                        destination = AppDestination.CAMERA
+                    },
+                    onSkip = {
+                        preferencesStore.markOnboardingCompleted()
+                        hasCompletedOnboarding = true
+                        destination = AppDestination.CAMERA
+                    },
+                )
+                AppDestination.CAMERA -> Column(Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(onClick = { destination = AppDestination.WORKBENCH }) {
+                            Text(stringResource(R.string.open_workbench))
+                        }
+                        Button(onClick = { destination = AppDestination.ALBUM }) {
+                            Text(stringResource(R.string.open_album))
+                        }
+                        Button(onClick = { destination = AppDestination.VIDEO }) {
+                            Text(stringResource(R.string.open_video))
+                        }
+                        Button(onClick = { destination = AppDestination.SETTINGS }) {
+                            Text(stringResource(R.string.open_settings))
+                        }
+                    }
+                    latestPhoto?.takeIf { latestPhotoVisible }?.let { photo ->
+                        Button(
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW).setDataAndType(photo, "image/jpeg")
+                                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        ) { Text(stringResource(R.string.latest_original_saved, photo.lastPathSegment ?: photo.toString())) }
+                    }
+                    CameraCaptureScreen(
+                        recipe = recipe,
+                        remainingExposures = remainingExposures,
+                        latestPhotoVisible = latestPhotoVisible,
+                        shutterSoundEnabled = preferences.shutterSoundEnabled,
+                        onPhotoSaved = { uri, recipe ->
+                            latestPhoto = uri
+                            latestPhotoVisible = false
+                            writeRecipeMetadata(context.contentResolver, uri, recipe)
+                            val capturedAtEpochMillis = System.currentTimeMillis()
+                            coroutineScope.launch {
+                                runCatching {
+                                    val active = rollService.activeRoll()
+                                    if (active == null || active.recipe != recipe) {
+                                        rollService.createRoll(recipe, FilmRollCapacity.EXPOSURES_24, capturedAtEpochMillis)
+                                    }
+                                    val recordedPhoto = rollService.recordCapture(
+                                        originalUri = uri,
+                                        recipe = recipe,
+                                        capturedAtEpochMillis = capturedAtEpochMillis,
+                                        developInstantly = preferences.instantDevelopment,
+                                    )
+                                    remainingExposures = rollService.remainingExposures()
+                                    latestPhotoVisible = recordedPhoto != null &&
+                                        recordedPhoto.id.value in rollService.visiblePhotoIds()
+                                }.onFailure { failure ->
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(
+                                            R.string.album_roll_action_failed,
+                                            failure.localizedMessage ?: context.getString(R.string.album_rolls_title),
+                                        ),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                AppDestination.WORKBENCH -> WorkbenchScreen(
+                    catalog = BuiltInEquipmentCatalog,
+                    selectedRecipe = recipe,
+                    onRecipeSelected = { selected ->
+                        coroutineScope.launch {
+                            val active = rollService.activeRoll()
+                            if (active != null && active.recipe != selected) {
+                                rollService.createRoll(selected, FilmRollCapacity.EXPOSURES_24)
+                            }
+                            recipe = selected
+                            destination = AppDestination.CAMERA
+                        }
+                    },
+                    onBack = { destination = AppDestination.CAMERA },
+                )
+
+                AppDestination.VIDEO -> VideoCaptureScreen(
+                    recipe = recipe,
+                    onVideoSaved = { result, selectedRecipe ->
+                        albumRepository.upsert(
+                            AlbumPhoto(
+                                id = result.uri.toString(),
+                                capturedAtEpochMillis = result.capturedAtEpochMillis,
+                                originalUri = result.uri.toString(),
+                                cameraBodyId = selectedRecipe.bodyId.value,
+                                lensId = selectedRecipe.lensId.value,
+                                filmStockId = selectedRecipe.filmStockId.value,
+                                mediaKind = AlbumMediaKind.VIDEO,
+                                durationMillis = result.durationMillis,
+                                notes = "recipe=${selectedRecipe.id.value};fps=${result.framesPerSecond};audio=${result.includesAudio}",
+                            ),
+                        )
+                    },
+                    onBack = { destination = AppDestination.CAMERA },
+                )
+
+                AppDestination.ALBUM -> AlbumLabScreen(
+                    repository = albumRepository,
+                    rollService = rollService,
+                    selectedRecipe = recipe,
+                    geotagService = geotagService,
+                    userPreferences = preferences,
+                    onBack = { destination = AppDestination.CAMERA },
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+                AppDestination.SETTINGS -> {
+                    permissionRefresh
+                    SettingsScreen(
+                        preferences = preferences,
+                        permissionState = context.permissionState(),
+                        onInstantDevelopmentChanged = { value -> preferences = preferences.copy(instantDevelopment = value).also(preferencesStore::save) },
+                        onGeotaggingChanged = { value -> preferences = preferences.copy(geotaggingEnabled = value).also(preferencesStore::save) },
+                        onShutterSoundChanged = { value -> preferences = preferences.copy(shutterSoundEnabled = value).also(preferencesStore::save) },
+                        onLanguageChanged = { value ->
+                            preferences = preferences.copy(languageTag = value).also(preferencesStore::save)
+                            context.applyLanguage(value)
+                            (context as? Activity)?.recreate()
+                        },
+                        onRequestPermission = { permission ->
+                            context.getSharedPreferences("theia_permission_requests", Context.MODE_PRIVATE)
+                                .edit().putBoolean(permission.manifestPermission(), true).apply()
+                            permissionLauncher.launch(permission.manifestPermission())
+                        },
+                        onOpenAppSettings = { openApplicationPermissionSettings(context) },
+                        modifier = Modifier.fillMaxSize(),
+                        onBack = { destination = AppDestination.CAMERA },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun DevicePermission.manifestPermission(): String = when (this) {
+    DevicePermission.CAMERA -> Manifest.permission.CAMERA
+    DevicePermission.MICROPHONE -> Manifest.permission.RECORD_AUDIO
+    DevicePermission.LOCATION -> Manifest.permission.ACCESS_COARSE_LOCATION
+    DevicePermission.PHOTO_LIBRARY -> if (android.os.Build.VERSION.SDK_INT >= 33) {
+        Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+}
+
+private fun android.content.Context.permissionState(): PermissionState = PermissionState(
+    camera = permissionStatus(Manifest.permission.CAMERA),
+    photoLibrary = permissionStatus(DevicePermission.PHOTO_LIBRARY.manifestPermission()),
+    microphone = permissionStatus(Manifest.permission.RECORD_AUDIO),
+    location = permissionStatus(Manifest.permission.ACCESS_COARSE_LOCATION),
+)
+
+private fun android.content.Context.permissionStatus(permission: String): PermissionStatus {
+    if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) return PermissionStatus.GRANTED
+    val requested = getSharedPreferences("theia_permission_requests", Context.MODE_PRIVATE)
+        .getBoolean(permission, false)
+    if (!requested) return PermissionStatus.NOT_REQUESTED
+    val shouldExplain = (this as? Activity)?.shouldShowRequestPermissionRationale(permission) == true
+    return if (shouldExplain) PermissionStatus.DENIED else PermissionStatus.RESTRICTED
+}
+
+@Composable
+private fun PlaceholderFeatureScreen(title: String, body: String, onBack: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.headlineMedium)
+        Text(body, style = MaterialTheme.typography.bodyLarge)
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Text(stringResource(R.string.back_to_preview))
+        }
+    }
+}
+
+private fun Context.applyLanguage(languageTag: String) {
+    val locale = java.util.Locale.forLanguageTag(languageTag)
+    if (Build.VERSION.SDK_INT >= 33) {
+        getSystemService(LocaleManager::class.java).applicationLocales = LocaleList(locale)
+    } else {
+        val config = Configuration(resources.configuration)
+        config.setLocale(locale)
+        resources.updateConfiguration(config, resources.displayMetrics)
     }
 }

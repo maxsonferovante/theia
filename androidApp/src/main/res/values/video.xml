@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_capture_title">Video capture</string>
+    <string name="video_capture_description">Up to 60 seconds · 1080p when supported</string>
+    <string name="video_camera_permission_explanation">Théia needs camera access to record video. Recordings are saved to your photo library.</string>
+    <string name="video_permission_denied">Camera access is still unavailable. You can grant it to record video.</string>
+    <string name="video_allow_camera">Allow camera</string>
+    <string name="video_camera_unavailable">No usable camera is available on this device.</string>
+    <string name="video_camera_start_failed">The camera could not be started.</string>
+    <string name="video_include_audio">Include audio (off by default)</string>
+    <string name="video_microphone_denied">Microphone access was not granted. Video will remain silent.</string>
+    <string name="video_start">Start recording</string>
+    <string name="video_stop">Stop recording</string>
+    <string name="video_saved">Video saved to your photo library.</string>
+    <string name="video_failed">Could not save video: %1$s</string>
+    <string name="video_capture_failed">Video capture failed.</string>
+    <string name="video_storage_failed">The video library folder could not be created.</string>
+    <string name="video_back">Back</string>
+    <string name="video_audio_on">Audio enabled</string>
+    <string name="video_audio_off">Audio disabled</string>
+    <string name="video_recording_status">Recording</string>
+    <string name="video_live_preview_description">Live video camera preview</string>
+    <string name="video_camera_starting">Starting camera</string>
+    <string name="video_open_settings">Open app settings</string>
+</resources>

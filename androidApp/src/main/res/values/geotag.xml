@@ -1,0 +1,13 @@
+<resources>
+    <string name="geotag_lab_title">Local geotags</string>
+    <string name="geotag_lab_privacy">Location stays on this device. The plot shows relative positions and uses no maps or network services.</string>
+    <string name="geotag_add_to_selected">Add location to selected photo</string>
+    <string name="geotag_added">Location saved to the photo on this device.</string>
+    <string name="geotag_removed">Location removed from the photo.</string>
+    <string name="geotag_unavailable">A location fix is unavailable.</string>
+    <string name="geotag_failed">Could not update the photo location.</string>
+    <string name="geotag_empty">No locally tagged photos.</string>
+    <string name="geotag_coordinates">Coordinates</string>
+    <string name="geotag_remove">Remove</string>
+    <string name="geotag_plot_description">Relative position plot for %1$d locally tagged photos</string>
+</resources>

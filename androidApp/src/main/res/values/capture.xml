@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="camera_capture_title">Capture</string>
+    <string name="camera_permission_explanation">Théia needs camera access to capture a photo. The original photo is saved to your photo library.</string>
+    <string name="camera_permission_denied">Camera access is still unavailable. You can grant it to use capture.</string>
+    <string name="camera_request_permission">Allow camera</string>
+    <string name="camera_unavailable">No usable camera is available on this device.</string>
+    <string name="camera_initialization_failed">The camera could not be started.</string>
+    <string name="camera_gallery_unavailable">The photo library could not save this image.</string>
+    <string name="camera_photo_saved">Original photo saved to your photo library.</string>
+    <string name="camera_capture_failed">The photo could not be captured.</string>
+    <string name="camera_take_photo">Take photo</string>
+    <string name="camera_switch_to_front">Switch to front camera</string>
+    <string name="camera_switch_to_back">Switch to back camera</string>
+    <string name="camera_back_camera_active">Back camera active</string>
+    <string name="camera_front_camera_active">Front camera active</string>
+    <string name="camera_status_saving">Saving photo</string>
+    <string name="camera_status_starting">Starting camera</string>
+    <string name="camera_live_preview_description">Live camera preview</string>
+    <string name="camera_open_settings">Open app settings</string>
+    <string name="camera_flash_auto">Flash auto</string>
+    <string name="camera_flash_on">Flash on</string>
+    <string name="camera_flash_off">Flash off</string>
+    <string name="camera_flash_unavailable">Flash unavailable</string>
+    <string name="camera_timer_off">Timer off</string>
+    <string name="camera_timer_three">3 sec</string>
+    <string name="camera_timer_ten">10 sec</string>
+    <string name="camera_timer_countdown">Self timer: %1$d seconds</string>
+    <string name="camera_grid">3 × 3 grid</string>
+    <string name="camera_zoom">Zoom</string>
+    <string name="camera_zoom_value">Zoom %1$s times</string>
+    <string name="camera_exposure">Exposure compensation</string>
+    <string name="camera_exposure_value">Exposure compensation index %1$d</string>
+    <string name="camera_control_unavailable">Unavailable</string>
+    <string name="camera_exposure_unavailable">Exposure compensation unavailable</string>
+    <string name="camera_focus_center">Focus center</string>
+    <string name="camera_tap_to_focus">Tap preview to focus and set exposure, or use Focus center.</string>
+    <string name="camera_focus_applied">Focus and exposure set.</string>
+    <string name="camera_focus_unavailable">Focus could not be set at this point.</string>
+    <string name="camera_view_latest">View latest photo</string>
+    <string name="camera_roll_remaining">%1$d exposures remaining</string>
+    <string name="camera_horizon_level">Three-axis horizon level</string>
+    <string name="camera_horizon_axes">Yaw %1$s°, pitch %2$s°, roll %3$s°</string>
+    <string name="camera_horizon_unavailable">Level sensor unavailable</string>
+</resources>

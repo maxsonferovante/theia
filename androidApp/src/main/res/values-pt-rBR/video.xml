@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_capture_title">Captura de vídeo</string>
+    <string name="video_capture_description">Até 60 segundos · 1080p quando disponível</string>
+    <string name="video_camera_permission_explanation">O Théia precisa de acesso à câmera para gravar vídeos. As gravações são salvas na sua galeria.</string>
+    <string name="video_permission_denied">O acesso à câmera continua indisponível. Você pode autorizá-lo para gravar.</string>
+    <string name="video_allow_camera">Permitir câmera</string>
+    <string name="video_camera_unavailable">Nenhuma câmera utilizável está disponível neste dispositivo.</string>
+    <string name="video_camera_start_failed">Não foi possível iniciar a câmera.</string>
+    <string name="video_include_audio">Incluir áudio (desativado inicialmente)</string>
+    <string name="video_microphone_denied">O acesso ao microfone não foi autorizado. O vídeo ficará sem som.</string>
+    <string name="video_start">Iniciar gravação</string>
+    <string name="video_stop">Parar gravação</string>
+    <string name="video_saved">Vídeo salvo na sua galeria.</string>
+    <string name="video_failed">Não foi possível salvar o vídeo: %1$s</string>
+    <string name="video_capture_failed">Falha ao capturar o vídeo.</string>
+    <string name="video_storage_failed">Não foi possível criar a pasta de vídeos na galeria.</string>
+    <string name="video_back">Voltar</string>
+    <string name="video_audio_on">Áudio ativado</string>
+    <string name="video_audio_off">Áudio desativado</string>
+    <string name="video_recording_status">Gravando</string>
+    <string name="video_live_preview_description">Prévia ao vivo da câmera de vídeo</string>
+    <string name="video_camera_starting">Iniciando câmera</string>
+    <string name="video_open_settings">Abrir configurações do app</string>
+</resources>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="camera_capture_title">Capturar</string>
+    <string name="camera_permission_explanation">O Théia precisa de acesso à câmera para tirar uma foto. A foto original será salva na sua galeria.</string>
+    <string name="camera_permission_denied">O acesso à câmera continua indisponível. Você pode autorizá-lo para capturar fotos.</string>
+    <string name="camera_request_permission">Permitir câmera</string>
+    <string name="camera_unavailable">Nenhuma câmera utilizável está disponível neste dispositivo.</string>
+    <string name="camera_initialization_failed">Não foi possível iniciar a câmera.</string>
+    <string name="camera_gallery_unavailable">Não foi possível salvar a imagem na galeria.</string>
+    <string name="camera_photo_saved">Foto original salva na sua galeria.</string>
+    <string name="camera_capture_failed">Não foi possível capturar a foto.</string>
+    <string name="camera_take_photo">Tirar foto</string>
+    <string name="camera_switch_to_front">Alternar para a câmera frontal</string>
+    <string name="camera_switch_to_back">Alternar para a câmera traseira</string>
+    <string name="camera_back_camera_active">Câmera traseira ativa</string>
+    <string name="camera_front_camera_active">Câmera frontal ativa</string>
+    <string name="camera_status_saving">Salvando foto</string>
+    <string name="camera_status_starting">Iniciando câmera</string>
+    <string name="camera_live_preview_description">Prévia ao vivo da câmera</string>
+    <string name="camera_open_settings">Abrir configurações do app</string>
+    <string name="camera_flash_auto">Flash automático</string>
+    <string name="camera_flash_on">Flash ligado</string>
+    <string name="camera_flash_off">Flash desligado</string>
+    <string name="camera_flash_unavailable">Flash indisponível</string>
+    <string name="camera_timer_off">Temporizador desligado</string>
+    <string name="camera_timer_three">3 s</string>
+    <string name="camera_timer_ten">10 s</string>
+    <string name="camera_timer_countdown">Temporizador: %1$d segundos</string>
+    <string name="camera_grid">Grade 3 × 3</string>
+    <string name="camera_zoom">Zoom</string>
+    <string name="camera_zoom_value">Zoom de %1$s vezes</string>
+    <string name="camera_exposure">Compensação de exposição</string>
+    <string name="camera_exposure_value">Índice de compensação de exposição %1$d</string>
+    <string name="camera_control_unavailable">Indisponível</string>
+    <string name="camera_exposure_unavailable">Compensação de exposição indisponível</string>
+    <string name="camera_focus_center">Focar no centro</string>
+    <string name="camera_tap_to_focus">Toque na prévia para focar e ajustar a exposição, ou use Focar no centro.</string>
+    <string name="camera_focus_applied">Foco e exposição ajustados.</string>
+    <string name="camera_focus_unavailable">Não foi possível focar neste ponto.</string>
+    <string name="camera_view_latest">Ver última foto</string>
+    <string name="camera_roll_remaining">%1$d exposições restantes</string>
+    <string name="camera_horizon_level">Nível de horizonte em três eixos</string>
+    <string name="camera_horizon_axes">Guinada %1$s°, inclinação %2$s°, rolagem %3$s°</string>
+    <string name="camera_horizon_unavailable">Sensor de nível indisponível</string>
+</resources>

@@ -1,0 +1,13 @@
+<resources>
+    <string name="geotag_lab_title">Geolocalizações locais</string>
+    <string name="geotag_lab_privacy">A localização permanece neste dispositivo. O gráfico mostra posições relativas e não usa mapas nem serviços de rede.</string>
+    <string name="geotag_add_to_selected">Adicionar localização à foto selecionada</string>
+    <string name="geotag_added">Localização salva na foto neste dispositivo.</string>
+    <string name="geotag_removed">Localização removida da foto.</string>
+    <string name="geotag_unavailable">Não foi possível obter uma localização.</string>
+    <string name="geotag_failed">Não foi possível atualizar a localização da foto.</string>
+    <string name="geotag_empty">Nenhuma foto com localização local.</string>
+    <string name="geotag_coordinates">Coordenadas</string>
+    <string name="geotag_remove">Remover</string>
+    <string name="geotag_plot_description">Gráfico de posição relativa para %1$d fotos com localização local</string>
+</resources>

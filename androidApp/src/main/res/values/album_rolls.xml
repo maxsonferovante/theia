@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="album_rolls_title">Film rolls</string>
+    <string name="album_rolls_fixed_recipe">A roll keeps the recipe selected when it starts. Original-only exposures stay hidden until they are developed.</string>
+    <string name="album_roll_capacity_24">24 exposures</string>
+    <string name="album_roll_capacity_36">36 exposures</string>
+    <string name="album_roll_choose_recipe">Choose a camera recipe before starting a roll.</string>
+    <string name="album_roll_recipe">Fixed recipe: %1$s · %2$s · %3$s</string>
+    <string name="album_roll_start">Start roll</string>
+    <string name="album_roll_progress">%1$d exposures · %2$d used · %3$d remaining</string>
+    <string name="album_roll_active_status">Active roll</string>
+    <string name="album_roll_developed_status">Developed</string>
+    <string name="album_roll_activate">Use this roll</string>
+    <string name="album_roll_develop_full">Develop full roll</string>
+    <string name="album_roll_develop_early">Develop early</string>
+    <string name="album_roll_early_title">Develop this roll early?</string>
+    <string name="album_roll_early_warning">This will close the roll after %1$d of %2$d exposures. The originals will stay in your photo library.</string>
+    <string name="album_roll_cancel">Keep roll open</string>
+    <string name="album_roll_action_failed">Roll action failed: %1$s</string>
+    <string name="album_roll_instant_note">Instant development can reveal each exposure while the roll stays open.</string>
+    <string name="album_roll_reveal_complete">Development complete · your prints are ready</string>
+</resources>

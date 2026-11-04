@@ -1,31 +1,42 @@
 # Théia
 
-Théia is a digital analog camera for iOS and Android. A camera body, lens, and film stock form a visual recipe applied to the live preview and final capture. The product favors a tactile, expressive, collectible experience that works locally without a required account or server.
+Théia is a digital analog camera for iOS and Android. A camera body, lens, and film stock form a visual recipe applied to captures. The product favors a tactile, expressive, collectible experience that keeps photos and videos under the user's local control.
 
 ## Status
 
-The repository contains the approved product specification, the Kotlin Multiplatform domain foundation, and an installable Android development shell. Product camera capture and the remaining native app flows will be added in their implementation tickets.
+The repository contains a Kotlin Multiplatform domain and native Android/iOS applications. It includes a selectable Workbench, still and short-video capture, film rolls and development, a local Album/Lab, optional geotags, onboarding, and privacy/accessibility settings. Photos and videos are saved to the system library as originals; development produces separate rendered copies. English and Brazilian Portuguese are supported.
+
+The apps and shared domain compile, and the shared domain tests pass. Physical-device performance measurements and complete capture-flow validation on both platforms are still release-validation work; see `docs/performance-validation.md`.
 
 ## Documentation
 
 - Rationale for the name: `docs/rationale-for-the-name-theia.docx`
 - Product specification: `docs/theia-product-spec.md`
 - Architecture: `docs/architecture.md`
+- Catalog authoring: `docs/catalog-authoring.md`
+- Performance validation: `docs/performance-validation.md`
+- Contribution guide: `CONTRIBUTING.md`
 - Brand mark: `assets/brand/theia-mark.svg`
 
 ## Development
 
-The shared module targets Android and iOS. Use the Gradle wrapper to compile and run the Android host tests:
+Use the checked-in Gradle wrapper, JDK 17, and Android SDK:
 
 ```sh
-./gradlew :shared:compileAndroidMain
-./gradlew :shared:testAndroidHostTest
-./gradlew :androidApp:assembleDebug
+./gradlew :shared:testAndroidHostTest :androidApp:compileDebugKotlin :androidApp:assembleDebug
 ```
 
-The development APK is written to `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. It exercises the shared capture-recipe model; camera capture is not implemented in this shell.
+The debug APK is written to `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Open the app on a device to use CameraX and MediaStore; emulator camera support depends on the selected virtual device.
 
-Building iOS frameworks and running iOS simulator tests requires Xcode and an installed iOS Simulator runtime.
+Build the iOS app with Xcode:
+
+```sh
+xcodebuild -project 'iosApp/Théia.xcodeproj' -scheme Théia \
+  -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+Running the iOS app requires an installed Simulator runtime or a configured iOS device. The shared Kotlin frameworks can be built with `./gradlew :shared:linkDebugFrameworkIosSimulatorArm64` on macOS.
 
 ## License
 

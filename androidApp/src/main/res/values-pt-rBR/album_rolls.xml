@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="album_rolls_title">Rolos de filme</string>
+    <string name="album_rolls_fixed_recipe">O rolo mantém a receita escolhida ao iniciar. Exposições ainda não reveladas ficam ocultas.</string>
+    <string name="album_roll_capacity_24">24 exposições</string>
+    <string name="album_roll_capacity_36">36 exposições</string>
+    <string name="album_roll_choose_recipe">Escolha uma receita de câmera antes de iniciar um rolo.</string>
+    <string name="album_roll_recipe">Receita fixa: %1$s · %2$s · %3$s</string>
+    <string name="album_roll_start">Iniciar rolo</string>
+    <string name="album_roll_progress">%1$d exposições · %2$d usadas · %3$d restantes</string>
+    <string name="album_roll_active_status">Rolo ativo</string>
+    <string name="album_roll_developed_status">Revelado</string>
+    <string name="album_roll_activate">Usar este rolo</string>
+    <string name="album_roll_develop_full">Revelar rolo completo</string>
+    <string name="album_roll_develop_early">Revelar antes</string>
+    <string name="album_roll_early_title">Revelar este rolo antes de completar?</string>
+    <string name="album_roll_early_warning">Isso encerrará o rolo após %1$d de %2$d exposições. Os originais permanecerão na sua galeria.</string>
+    <string name="album_roll_cancel">Manter rolo aberto</string>
+    <string name="album_roll_action_failed">Falha ao atualizar rolo: %1$s</string>
+    <string name="album_roll_instant_note">A revelação instantânea pode revelar cada exposição enquanto o rolo continua aberto.</string>
+    <string name="album_roll_reveal_complete">Revelação concluída · suas fotos estão prontas</string>
+</resources>
