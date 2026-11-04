@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Théia</string>
+    <string name="android_development_build">VERSÃO DE DESENVOLVIMENTO ANDROID</string>
+    <string name="shared_foundation">Base compartilhada</string>
+    <string name="capture_recipe">Receita de captura</string>
+    <string name="shared_domain_loaded">Domínio Kotlin compartilhado carregado.</string>
+    <string name="recipe_validated">Receita validada neste aparelho.</string>
+    <string name="test_shared_recipe">Testar receita compartilhada</string>
+    <string name="camera_not_implemented">Versão de desenvolvimento. A captura pela câmera ainda não foi implementada.</string>
+</resources>

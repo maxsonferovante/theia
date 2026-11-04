@@ -7,6 +7,7 @@ Théia shares domain rules between Android and iOS while keeping the user interf
 ## Project Structure
 
 - `shared` is the Kotlin Multiplatform module. Its `commonMain` source set owns domain models, stable identifiers, versioned serialization, platform ports, and application use cases.
+- `androidApp` is a native Jetpack Compose development shell that depends on `shared` and exercises a sample `CaptureRecipe` on device.
 - The Android target is provided by Google's Android-KMP library plugin and builds an Android library.
 - The iOS targets produce a static `TheiaShared` framework for ARM64 devices and Apple Silicon simulators.
 - Native app entry points and platform adapter implementations are added by their feature tickets. The current module intentionally contains no camera or UI framework dependencies.
@@ -55,4 +56,4 @@ The project declares `iosArm64` and `iosSimulatorArm64` framework targets. Build
 
 ## Current Boundary
 
-The foundation defines reusable models, serialization, ports, and one representative use case. It does not yet implement real camera or media-library adapters, UI, catalog content, image effects, storage, or dependency injection. Those responsibilities belong to their corresponding implementation tickets.
+The foundation defines reusable models, serialization, ports, and one representative use case. The Android module currently provides only a development smoke-test screen; it does not implement camera capture. Real camera or media-library adapters, product UI, catalog content, image effects, storage, and dependency injection belong to their corresponding implementation tickets.

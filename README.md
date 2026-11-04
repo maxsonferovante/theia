@@ -4,7 +4,7 @@ Théia is a digital analog camera for iOS and Android. A camera body, lens, and 
 
 ## Status
 
-The repository contains the approved product specification and the Kotlin Multiplatform domain foundation. The Android and iOS interfaces and platform adapters will be added in the implementation tickets.
+The repository contains the approved product specification, the Kotlin Multiplatform domain foundation, and an installable Android development shell. Product camera capture and the remaining native app flows will be added in their implementation tickets.
 
 ## Documentation
 
@@ -20,9 +20,12 @@ The shared module targets Android and iOS. Use the Gradle wrapper to compile and
 ```sh
 ./gradlew :shared:compileAndroidMain
 ./gradlew :shared:testAndroidHostTest
+./gradlew :androidApp:assembleDebug
 ```
 
-Building the iOS framework and running every native test target requires Xcode 26.4 or later.
+The development APK is written to `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. It exercises the shared capture-recipe model; camera capture is not implemented in this shell.
+
+Building iOS frameworks and running iOS simulator tests requires Xcode and an installed iOS Simulator runtime.
 
 ## License
 
