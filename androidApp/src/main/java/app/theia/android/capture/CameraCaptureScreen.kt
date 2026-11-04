@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -50,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -108,6 +110,8 @@ private val CameraStone = Color(0xFFB6A58C)
 fun CameraCaptureScreen(
     recipe: CaptureRecipe,
     onPhotoSaved: (Uri, CaptureRecipe) -> Unit,
+    externalShutterRequest: Int = 0,
+    onShutterAvailabilityChanged: (Boolean) -> Unit = {},
     remainingExposures: Int? = null,
     latestPhotoVisible: Boolean = true,
     shutterSoundEnabled: Boolean = true,
@@ -175,6 +179,10 @@ fun CameraCaptureScreen(
     val zoomStateDescription = stringResource(R.string.camera_zoom_value, String.format(Locale.getDefault(), "%.1f", zoomRatio))
     val exposureStateDescription = stringResource(R.string.camera_exposure_value, exposureIndex)
     val waitingStatus = stringResource(R.string.camera_status_starting)
+
+    SideEffect {
+        onShutterAvailabilityChanged(permissionsGranted && cameraSession != null)
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -315,6 +323,28 @@ fun CameraCaptureScreen(
         )
     }
 
+    fun triggerShutter() {
+        if (!permissionsGranted || cameraSession == null || captureInProgress || timerCountdown > 0) return
+        if (timerSeconds > 0) {
+            timerCountdown = timerSeconds
+            coroutineScope.launch {
+                while (timerCountdown > 0) {
+                    delay(1_000)
+                    timerCountdown -= 1
+                }
+                capturePhoto()
+            }
+        } else capturePhoto()
+    }
+
+    var lastHandledExternalShutterRequest by remember { mutableIntStateOf(externalShutterRequest) }
+    LaunchedEffect(externalShutterRequest) {
+        if (externalShutterRequest > lastHandledExternalShutterRequest) {
+            lastHandledExternalShutterRequest = externalShutterRequest
+            triggerShutter()
+        }
+    }
+
     MaterialTheme {
         Surface(modifier = modifier.fillMaxSize(), color = CameraDeepSky) {
             Box(Modifier.fillMaxSize()) {
@@ -350,7 +380,7 @@ fun CameraCaptureScreen(
                 }
 
                 if (permissionsGranted && cameraSession != null) {
-                    HorizonLevelOverlay(Modifier.align(Alignment.Center).padding(top = 44.dp))
+                    HorizonLevelOverlay(Modifier.align(Alignment.Center).offset(y = (-140).dp))
                 }
 
                 Column(
@@ -414,13 +444,18 @@ fun CameraCaptureScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .heightIn(max = 360.dp)
                         .background(CameraDeepSky.copy(alpha = 0.72f))
-                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 258.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                     if (flashAvailable) {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FlashChoice.entries.forEach { choice ->
@@ -527,19 +562,10 @@ fun CameraCaptureScreen(
                         ) { Text(switchCameraDescription) }
                     }
 
+                    }
+
                     IconButton(
-                        onClick = {
-                            if (timerSeconds > 0) {
-                                timerCountdown = timerSeconds
-                                coroutineScope.launch {
-                                    while (timerCountdown > 0) {
-                                        delay(1_000)
-                                        timerCountdown -= 1
-                                    }
-                                    capturePhoto()
-                                }
-                            } else capturePhoto()
-                        },
+                        onClick = { triggerShutter() },
                         enabled = permissionsGranted && cameraSession != null && !captureInProgress && timerCountdown == 0,
                         modifier = Modifier
                             .size(76.dp)
@@ -684,19 +710,21 @@ private fun saveOriginal(
             )
         }
     }
-    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-    if (uri == null) {
-        onComplete(Result.failure(IllegalStateException(context.getString(R.string.camera_gallery_unavailable))))
-        return
-    }
-
-    val outputOptions = ImageCapture.OutputFileOptions.Builder(resolver, uri, ContentValues()).build()
+    val outputOptions = ImageCapture.OutputFileOptions.Builder(
+        resolver,
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+        contentValues,
+    ).build()
     imageCapture.takePicture(
         outputOptions,
         executor,
         object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                val savedUri = output.savedUri ?: uri
+                val savedUri = output.savedUri
+                if (savedUri == null) {
+                    onComplete(Result.failure(IllegalStateException(context.getString(R.string.camera_gallery_unavailable))))
+                    return
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val publishValues = ContentValues().apply {
                         put(MediaStore.Images.Media.IS_PENDING, 0)
@@ -707,7 +735,12 @@ private fun saveOriginal(
             }
 
             override fun onError(exception: ImageCaptureException) {
-                resolver.delete(uri, null, null)
+                val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    "${MediaStore.Images.Media.DISPLAY_NAME}=? AND ${MediaStore.Images.Media.IS_PENDING}=1"
+                } else {
+                    "${MediaStore.Images.Media.DISPLAY_NAME}=?"
+                }
+                resolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, arrayOf(name))
                 onComplete(Result.failure(exception))
             }
         },

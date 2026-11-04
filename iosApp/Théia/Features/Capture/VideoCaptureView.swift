@@ -12,6 +12,21 @@ struct NativeVideoCaptureRecord: Equatable {
     let capturedAt: Date
     let durationSeconds: Int
     let includesAudio: Bool
+    let videoStyleID: String
+}
+
+private struct VideoStyleOption: Identifiable {
+    let id: String
+    let localizationKey: String
+}
+
+private enum VideoStyleOptions {
+    static let equipmentRecipeID = "equipment-recipe"
+    static let choices = [
+        VideoStyleOption(id: equipmentRecipeID, localizationKey: "video_style_recipe"),
+        VideoStyleOption(id: "cinematic-warm", localizationKey: "video_style_cinematic_warm"),
+        VideoStyleOption(id: "moonlit-monochrome", localizationKey: "video_style_moonlit_monochrome"),
+    ]
 }
 
 /// Native short-video capture. Video does not use or advance a film roll.
@@ -70,6 +85,19 @@ struct VideoCaptureView: View {
 
     private var controls: some View {
         VStack(spacing: 20) {
+            Picker(NSLocalizedString("video_style_label", comment: "Choose a video visual style"), selection: Binding(
+                get: { recorder.selectedVideoStyleID },
+                set: { recorder.selectVideoStyle($0, recipe: recipe) }
+            )) {
+                ForEach(VideoStyleOptions.choices) { choice in
+                    Text(NSLocalizedString(choice.localizationKey, comment: "Video visual style option"))
+                        .tag(choice.id)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(recorder.isRecording || recorder.isSaving)
+            .accessibilityLabel(NSLocalizedString("video_style_label", comment: "Choose a video visual style"))
+
             HStack {
                 Label(NSLocalizedString(recorder.includesAudio ? "video_audio_on" : "video_audio_off", comment: "Audio recording status"), systemImage: recorder.includesAudio ? "mic.fill" : "mic.slash")
                     .font(.subheadline.weight(.medium))
@@ -85,7 +113,7 @@ struct VideoCaptureView: View {
             }
 
             HStack {
-                Text(recorder.isRecording ? "Recording" : "Ready to record")
+                Text(NSLocalizedString(recorder.isRecording ? "video_recording_status" : "video_ready_status", comment: "Video recording state"))
                     .font(.caption.weight(.semibold))
                     .accessibilityLabel(NSLocalizedString(recorder.isRecording ? "video_recording_status" : "video_ready_status", comment: "Video recording status"))
                 Spacer()
@@ -150,12 +178,12 @@ struct VideoCaptureView: View {
 
 @MainActor
 private final class VideoCaptureModel: ObservableObject {
-    @Published private(set) var session = AVCaptureSession()
     @Published private(set) var previewFrame: CGImage?
     @Published private(set) var cameraReady = false
     @Published private(set) var cameraDenied = false
     @Published private(set) var shouldExplainCameraPermission = false
     @Published private(set) var includesAudio = false
+    @Published private(set) var selectedVideoStyleID = VideoStyleOptions.equipmentRecipeID
     @Published private(set) var isRecording = false
     @Published private(set) var isSaving = false
     @Published private(set) var elapsedSeconds = 0
@@ -167,17 +195,14 @@ private final class VideoCaptureModel: ObservableObject {
     @Published private(set) var showSettingsAction = false
 
     private let sessionQueue = DispatchQueue(label: "app.theia.video.session")
-    private let movieOutput = AVCaptureMovieFileOutput()
-    private let videoDataOutput = AVCaptureVideoDataOutput()
+    private let resources = VideoSessionResources()
     private let frameProcessor = NativeFilmVideoFrameProcessor()
-    private var videoInput: AVCaptureDeviceInput?
-    private var audioInput: AVCaptureDeviceInput?
-    private var activeDevice: AVCaptureDevice?
     private var recordingDelegate: VideoFileRecordingDelegate?
     private var recordingTask: Task<Void, Never>?
     private var recordingStartedAt: Date?
     private var pendingRecipe: NativeCaptureRecipe?
     private var pendingAudio = false
+    private var pendingVideoStyleID = VideoStyleOptions.equipmentRecipeID
 
     init() {
         frameProcessor.onPreviewFrame = { [weak self] image in self?.previewFrame = image }
@@ -185,7 +210,7 @@ private final class VideoCaptureModel: ObservableObject {
 
     func prepareCameraPermissionState(recipe: NativeCaptureRecipe) {
         do {
-            guard let parameters = try NativeFilmVisualProfileCatalog.resolve(recipe: recipe) else {
+            guard let parameters = try NativeFilmVisualProfileCatalog.resolve(recipe: recipe, videoStyleID: selectedVideoStyleID) else {
                 throw NativeFilmImageProcessorError.unsupportedProfileVersion
             }
             frameProcessor.configure(parameters: parameters)
@@ -198,6 +223,19 @@ private final class VideoCaptureModel: ObservableObject {
             shouldExplainCameraPermission = true
         case .denied, .restricted: cameraDenied = true
         @unknown default: cameraDenied = true
+        }
+    }
+
+    func selectVideoStyle(_ styleID: String, recipe: NativeCaptureRecipe) {
+        guard !isRecording, !isSaving, selectedVideoStyleID != styleID else { return }
+        do {
+            guard let parameters = try NativeFilmVisualProfileCatalog.resolve(recipe: recipe, videoStyleID: styleID) else {
+                throw NativeFilmImageProcessorError.unsupportedProfileVersion
+            }
+            selectedVideoStyleID = styleID
+            frameProcessor.configure(parameters: parameters)
+        } catch {
+            present(NSLocalizedString("video_profile_unavailable", comment: "Film profile unavailable"), settings: false)
         }
     }
 
@@ -237,6 +275,7 @@ private final class VideoCaptureModel: ObservableObject {
         try? FileManager.default.removeItem(at: url)
         pendingRecipe = recipe
         pendingAudio = includesAudio
+        pendingVideoStyleID = selectedVideoStyleID
         elapsedSeconds = 0
         recordingStartedAt = Date()
         let delegate = VideoFileRecordingDelegate { [weak self] outputURL, error in
@@ -247,16 +286,22 @@ private final class VideoCaptureModel: ObservableObject {
                 self.recordingTask = nil
                 if let error { self.present(String(format: NSLocalizedString("video_record_error_format", comment: "Recording error"), error.localizedDescription), settings: false) }
                 else if let outputURL, let recipe = self.pendingRecipe {
-                    await self.saveVideo(outputURL, recipe: recipe, includesAudio: self.pendingAudio)
+                    await self.saveVideo(
+                        outputURL,
+                        recipe: recipe,
+                        includesAudio: self.pendingAudio,
+                        videoStyleID: self.pendingVideoStyleID
+                    )
                 }
                 self.recordingDelegate = nil
             }
         }
         recordingDelegate = delegate
         isRecording = true
-        sessionQueue.async { [weak self] in
-            guard let self, !self.movieOutput.isRecording else { return }
-            self.movieOutput.startRecording(to: url, recordingDelegate: delegate)
+        let resources = resources
+        sessionQueue.async {
+            guard !resources.movieOutput.isRecording else { return }
+            resources.movieOutput.startRecording(to: url, recordingDelegate: delegate)
         }
         recordingTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -270,19 +315,21 @@ private final class VideoCaptureModel: ObservableObject {
 
     func stopRecording() {
         guard isRecording else { return }
-        sessionQueue.async { [weak self] in
-            guard let self, self.movieOutput.isRecording else { return }
-            self.movieOutput.stopRecording()
+        let resources = resources
+        sessionQueue.async {
+            guard resources.movieOutput.isRecording else { return }
+            resources.movieOutput.stopRecording()
         }
     }
 
     func stopSession() {
         recordingTask?.cancel()
+        let resources = resources
         sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
-            if self.movieOutput.isRecording { self.movieOutput.stopRecording() }
-            self.session.stopRunning()
-            Task { @MainActor in self.cameraReady = false }
+            guard resources.session.isRunning else { return }
+            if resources.movieOutput.isRecording { resources.movieOutput.stopRecording() }
+            resources.session.stopRunning()
+            Task { @MainActor in self?.cameraReady = false }
         }
     }
 
@@ -292,107 +339,118 @@ private final class VideoCaptureModel: ObservableObject {
     }
 
     private func configureSession() {
+        let resources = resources
+        let frameProcessor = frameProcessor
+        let sessionQueue = sessionQueue
         sessionQueue.async { [weak self] in
-            guard let self else { return }
-            guard !self.session.isRunning else { Task { @MainActor in self.cameraReady = true }; return }
-            if self.videoInput != nil {
-                self.session.startRunning()
-                Task { @MainActor in self.cameraReady = true }
+            guard !resources.session.isRunning else { Task { @MainActor in self?.cameraReady = true }; return }
+            if resources.videoInput != nil {
+                resources.session.startRunning()
+                Task { @MainActor in self?.cameraReady = true }
                 return
             }
 
-            self.session.beginConfiguration()
-            if self.session.canSetSessionPreset(.hd1920x1080) { self.session.sessionPreset = .hd1920x1080 }
-            else { self.session.sessionPreset = .high }
-            self.videoDataOutput.videoSettings = [
+            resources.session.beginConfiguration()
+            if resources.session.canSetSessionPreset(.hd1920x1080) { resources.session.sessionPreset = .hd1920x1080 }
+            else { resources.session.sessionPreset = .high }
+            resources.videoDataOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
             ]
-            self.videoDataOutput.alwaysDiscardsLateVideoFrames = true
-            self.videoDataOutput.setSampleBufferDelegate(self.frameProcessor, queue: self.sessionQueue)
+            resources.videoDataOutput.alwaysDiscardsLateVideoFrames = true
+            resources.videoDataOutput.setSampleBufferDelegate(frameProcessor, queue: sessionQueue)
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                   let input = try? AVCaptureDeviceInput(device: device),
-                  self.session.canAddInput(input), self.session.canAddOutput(self.movieOutput),
-                  self.session.canAddOutput(self.videoDataOutput) else {
-                self.session.commitConfiguration()
-                Task { @MainActor in self.present(NSLocalizedString("video_camera_unavailable", comment: "No compatible camera error"), settings: false) }
+                  resources.session.canAddInput(input), resources.session.canAddOutput(resources.movieOutput),
+                  resources.session.canAddOutput(resources.videoDataOutput) else {
+                resources.session.commitConfiguration()
+                Task { @MainActor in self?.present(NSLocalizedString("video_camera_unavailable", comment: "No compatible camera error"), settings: false) }
                 return
             }
-            self.configureFrameRate(device)
-            self.session.addInput(input)
-            self.session.addOutput(self.movieOutput)
-            self.session.addOutput(self.videoDataOutput)
-            if let connection = self.videoDataOutput.connection(with: .video), connection.isVideoOrientationSupported {
+            let frameRate = Self.configureFrameRate(device)
+            resources.session.addInput(input)
+            resources.session.addOutput(resources.movieOutput)
+            resources.session.addOutput(resources.videoDataOutput)
+            if let connection = resources.videoDataOutput.connection(with: .video), connection.isVideoOrientationSupported {
                 connection.videoOrientation = .portrait
             }
-            if let connection = self.movieOutput.connection(with: .video), connection.isVideoOrientationSupported {
+            if let connection = resources.movieOutput.connection(with: .video), connection.isVideoOrientationSupported {
                 connection.videoOrientation = .portrait
             }
-            self.videoInput = input
-            self.activeDevice = device
-            self.session.commitConfiguration()
-            self.session.startRunning()
-            Task { @MainActor in self.cameraReady = true }
+            resources.videoInput = input
+            resources.session.commitConfiguration()
+            resources.session.startRunning()
+            Task { @MainActor in
+                self?.framesPerSecond = frameRate.framesPerSecond
+                if frameRate.usedFallback {
+                    self?.present(NSLocalizedString("video_frame_rate_fallback", comment: "Frame rate fallback information"), settings: false)
+                }
+                self?.cameraReady = true
+            }
         }
     }
 
-    private func configureFrameRate(_ device: AVCaptureDevice) {
+    private nonisolated static func configureFrameRate(_ device: AVCaptureDevice) -> (framesPerSecond: Int, usedFallback: Bool) {
         guard let range = device.activeFormat.videoSupportedFrameRateRanges.first(where: { $0.minFrameRate <= 30 && $0.maxFrameRate >= 30 }) else {
             let supported = device.activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
-            framesPerSecond = max(1, Int(supported))
-            return
+            return (max(1, Int(supported)), false)
         }
         do {
             try device.lockForConfiguration()
             device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 30)
             device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 30)
             device.unlockForConfiguration()
-            framesPerSecond = Int(range.maxFrameRate >= 30 ? 30 : range.maxFrameRate)
-        } catch { present(NSLocalizedString("video_frame_rate_fallback", comment: "Frame rate fallback information"), settings: false) }
+            return (Int(range.maxFrameRate >= 30 ? 30 : range.maxFrameRate), false)
+        } catch { return (Int(range.maxFrameRate), true) }
     }
 
     private func installAudioInput() async {
-        guard audioInput == nil else { includesAudio = true; return }
+        let resources = resources
+        let alreadyInstalled = await withCheckedContinuation { continuation in
+            sessionQueue.async { continuation.resume(returning: resources.audioInput != nil) }
+        }
+        guard !alreadyInstalled else { includesAudio = true; return }
         guard let device = AVCaptureDevice.default(for: .audio),
               let input = try? AVCaptureDeviceInput(device: device) else {
             present(NSLocalizedString("video_microphone_unavailable", comment: "Microphone unavailable"), settings: false)
             return
         }
+        let inputReference = VideoCaptureInputReference(input)
         await withCheckedContinuation { continuation in
             sessionQueue.async { [weak self] in
-                guard let self else { continuation.resume(); return }
-                self.session.beginConfiguration()
-                if self.session.canAddInput(input) {
-                    self.session.addInput(input)
-                    self.audioInput = input
-                    Task { @MainActor in self.includesAudio = true }
+                resources.session.beginConfiguration()
+                if resources.session.canAddInput(inputReference.value) {
+                    resources.session.addInput(inputReference.value)
+                    resources.audioInput = inputReference.value
+                    Task { @MainActor in self?.includesAudio = true }
                 } else {
-                    Task { @MainActor in self.present(NSLocalizedString("video_microphone_configuration_error", comment: "Microphone configuration error"), settings: false) }
+                    Task { @MainActor in self?.present(NSLocalizedString("video_microphone_configuration_error", comment: "Microphone configuration error"), settings: false) }
                 }
-                self.session.commitConfiguration()
+                resources.session.commitConfiguration()
                 continuation.resume()
             }
         }
     }
 
     private func removeAudioInput() {
-        sessionQueue.async { [weak self] in
-            guard let self, let audioInput = self.audioInput else { return }
-            self.session.beginConfiguration()
-            self.session.removeInput(audioInput)
-            self.audioInput = nil
-            self.session.commitConfiguration()
+        let resources = resources
+        sessionQueue.async {
+            guard let audioInput = resources.audioInput else { return }
+            resources.session.beginConfiguration()
+            resources.session.removeInput(audioInput)
+            resources.audioInput = nil
+            resources.session.commitConfiguration()
         }
     }
 
-    private func saveVideo(_ url: URL, recipe: NativeCaptureRecipe, includesAudio: Bool) async {
+    private func saveVideo(_ url: URL, recipe: NativeCaptureRecipe, includesAudio: Bool, videoStyleID: String) async {
         isSaving = true
-        let developedURL = try? await movieWithFilmProfile(url, recipe: recipe)
+        let developedURL = try? await movieWithFilmProfile(url, recipe: recipe, videoStyleID: videoStyleID)
         if developedURL == nil {
             present(NSLocalizedString("video_profile_export_fallback", comment: "Filtered video export failed; original will be saved"), settings: false)
         }
-        let originalMetadataURL = try? await movieWithRecipeMetadata(url, recipe: recipe)
+        let originalMetadataURL = try? await movieWithRecipeMetadata(url, recipe: recipe, videoStyleID: videoStyleID)
         let developedMetadataURL: URL?
-        if let developedURL { developedMetadataURL = try? await movieWithRecipeMetadata(developedURL, recipe: recipe) }
+        if let developedURL { developedMetadataURL = try? await movieWithRecipeMetadata(developedURL, recipe: recipe, videoStyleID: videoStyleID) }
         else { developedMetadataURL = nil }
         defer {
             isSaving = false
@@ -421,7 +479,8 @@ private final class VideoCaptureModel: ObservableObject {
                 recipe: recipe,
                 capturedAt: recordingStartedAt ?? Date(),
                 durationSeconds: duration,
-                includesAudio: includesAudio
+                includesAudio: includesAudio,
+                videoStyleID: videoStyleID
             )
         } catch { present(error.localizedDescription, settings: false) }
     }
@@ -441,8 +500,12 @@ private final class VideoCaptureModel: ObservableObject {
         }
     }
 
-    private func movieWithFilmProfile(_ sourceURL: URL, recipe: NativeCaptureRecipe) async throws -> URL {
-        guard let parameters = try NativeFilmVisualProfileCatalog.resolve(recipe: recipe) else {
+    private func movieWithFilmProfile(
+        _ sourceURL: URL,
+        recipe: NativeCaptureRecipe,
+        videoStyleID: String
+    ) async throws -> URL {
+        guard let parameters = try NativeFilmVisualProfileCatalog.resolve(recipe: recipe, videoStyleID: videoStyleID) else {
             throw NativeFilmImageProcessorError.unsupportedProfileVersion
         }
         let asset = AVURLAsset(url: sourceURL)
@@ -459,20 +522,21 @@ private final class VideoCaptureModel: ObservableObject {
         exporter.outputFileType = .mov
         exporter.videoComposition = composition
         exporter.shouldOptimizeForNetworkUse = false
+        let exportReference = VideoExportSessionReference(exporter)
         do {
             try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    exporter.exportAsynchronously {
-                        switch exporter.status {
+                    exportReference.value.exportAsynchronously {
+                        switch exportReference.value.status {
                         case .completed: continuation.resume()
                         case .cancelled: continuation.resume(throwing: CancellationError())
-                        case .failed: continuation.resume(throwing: exporter.error ?? VideoCaptureError.profileExportUnavailable)
+                        case .failed: continuation.resume(throwing: exportReference.value.error ?? VideoCaptureError.profileExportUnavailable)
                         default: continuation.resume(throwing: VideoCaptureError.profileExportUnavailable)
                         }
                     }
                 }
             } onCancel: {
-                exporter.cancelExport()
+                exportReference.value.cancelExport()
             }
             return outputURL
         } catch {
@@ -483,7 +547,11 @@ private final class VideoCaptureModel: ObservableObject {
 
     /// Attempts a passthrough QuickTime export that adds a compact recipe comment without transcoding.
     /// If the container or device cannot preserve metadata in passthrough, the original MOV is saved.
-    private func movieWithRecipeMetadata(_ sourceURL: URL, recipe: NativeCaptureRecipe) async throws -> URL {
+    private func movieWithRecipeMetadata(
+        _ sourceURL: URL,
+        recipe: NativeCaptureRecipe,
+        videoStyleID: String
+    ) async throws -> URL {
         let asset = AVURLAsset(url: sourceURL)
         guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough) else {
             throw VideoCaptureError.metadataExportUnavailable
@@ -498,6 +566,7 @@ private final class VideoCaptureModel: ObservableObject {
             "body": recipe.cameraBodyID,
             "lens": recipe.lensID,
             "film": recipe.filmStockID,
+            "video_style": videoStyleID,
         ]
         let encoded = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
         let metadata = AVMutableMetadataItem()
@@ -506,13 +575,14 @@ private final class VideoCaptureModel: ObservableObject {
         metadata.value = String(data: encoded, encoding: .utf8) as NSString?
         metadata.dataType = kCMMetadataBaseDataType_UTF8 as String
         exporter.metadata = [metadata]
+        let exportReference = VideoExportSessionReference(exporter)
 
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                exporter.exportAsynchronously {
-                    switch exporter.status {
+                exportReference.value.exportAsynchronously {
+                    switch exportReference.value.status {
                     case .completed: continuation.resume()
-                    case .failed: continuation.resume(throwing: exporter.error ?? VideoCaptureError.metadataExportUnavailable)
+                    case .failed: continuation.resume(throwing: exportReference.value.error ?? VideoCaptureError.metadataExportUnavailable)
                     case .cancelled: continuation.resume(throwing: VideoCaptureError.metadataExportUnavailable)
                     default: continuation.resume(throwing: VideoCaptureError.metadataExportUnavailable)
                     }
@@ -545,7 +615,26 @@ private final class VideoCaptureModel: ObservableObject {
     }
 }
 
-private final class VideoFileRecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
+/// All mutable AVFoundation capture state is accessed only from `sessionQueue`.
+private final class VideoSessionResources: @unchecked Sendable {
+    let session = AVCaptureSession()
+    let movieOutput = AVCaptureMovieFileOutput()
+    let videoDataOutput = AVCaptureVideoDataOutput()
+    var videoInput: AVCaptureDeviceInput?
+    var audioInput: AVCaptureDeviceInput?
+}
+
+private final class VideoCaptureInputReference: @unchecked Sendable {
+    let value: AVCaptureDeviceInput
+    init(_ value: AVCaptureDeviceInput) { self.value = value }
+}
+
+private final class VideoExportSessionReference: @unchecked Sendable {
+    let value: AVAssetExportSession
+    init(_ value: AVAssetExportSession) { self.value = value }
+}
+
+private final class VideoFileRecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate, @unchecked Sendable {
     private let completion: (URL?, Error?) -> Void
     init(completion: @escaping (URL?, Error?) -> Void) { self.completion = completion }
 

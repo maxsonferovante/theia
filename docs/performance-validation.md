@@ -30,3 +30,13 @@ This checklist defines the device measurements for ticket #12. Passing a compile
 ## Current status
 
 Automated checks cover domain integrity and native compilation. Physical-device traces and measured frame-rate results must be recorded before the performance issue can be closed.
+
+## Partial device smoke check — 2026-11-04
+
+- Device: Motorola Edge 60, Android 16.
+- Camera preview ran continuously during a short on-device check. Android BufferQueue logs for the app surface varied from 28.53 to 29.99 fps in the sampled one-second windows; this does not establish a sustained 30 fps pass.
+- A 12-second Perfetto trace was captured, but it has not been analyzed or attached as a reviewed trace.
+- A still photo saved to the system gallery and its roll record persisted in Théia after the CameraX MediaStore flow was corrected.
+- The synthetic ADB volume-key event opened the system volume panel, so physical-button shutter behavior still needs verification with a real device-button press. iOS capture-event behavior also has only build evidence so far.
+
+The multi-device performance target, trace analysis, capture interruption/storage recovery, and hardware-button verification remain open.

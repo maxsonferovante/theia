@@ -296,6 +296,10 @@
 "capture_error_photo_save" = "Não foi possível salvar a foto. A captura não foi adicionada à galeria. Tente novamente.";
 "capture_error_photo_prepare" = "A câmera não conseguiu preparar esta foto. Tente capturar novamente.";
 "video_title" = "Vídeo";
+"video_style_label" = "Estilo do vídeo";
+"video_style_recipe" = "Equipamento";
+"video_style_cinematic_warm" = "Cinema quente";
+"video_style_moonlit_monochrome" = "Lunar mono";
 "video_saving" = "Salvando vídeo…";
 "video_audio_on" = "Áudio ativado";
 "video_audio_off" = "Áudio desativado";
@@ -458,3 +462,14 @@
 "Allow Photos access to share this capture." = "Permita o acesso ao Fotos para compartilhar esta captura.";
 "This Photos item is unavailable on this device. Download it to Photos before sharing." = "Este item do Fotos não está disponível neste dispositivo. Baixe-o no Fotos antes de compartilhar.";
 "album_location_plot_title" = "Localizações salvas";
+"Duration" = "Duração";
+"Audio" = "Áudio";
+"On" = "Ativado";
+"Off" = "Desativado";
+"Video" = "Vídeo";
+"Opens capture details in the Lab." = "Abre os detalhes da captura no Lab.";
+"Closes capture details." = "Fecha os detalhes da captura.";
+"Shares the media file and its camera recipe." = "Compartilha o arquivo de mídia e sua receita de câmera.";
+"Recipe ID" = "ID da receita";
+"Roll" = "Rolo";
+"Done" = "Concluído";

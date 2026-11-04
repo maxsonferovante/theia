@@ -12,7 +12,7 @@ import androidx.camera.core.CameraEffect
 import androidx.camera.core.SurfaceOutput
 import androidx.camera.core.SurfaceProcessor
 import androidx.camera.core.SurfaceRequest
-import app.theia.domain.catalog.BuiltInFilmVisualProfiles
+import app.theia.domain.catalog.BuiltInVideoStyles
 import app.theia.domain.model.CaptureRecipe
 import app.theia.domain.model.ResolvedVisualParameters
 import java.nio.ByteBuffer
@@ -23,13 +23,17 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 /** CameraX GPU effect shared by live preview and encoded video frames. */
-class FilmPreviewEffect(recipe: CaptureRecipe, includeVideoTarget: Boolean) : CameraEffect(
+class FilmPreviewEffect(
+    recipe: CaptureRecipe,
+    includeVideoTarget: Boolean,
+    videoStyleId: String = BuiltInVideoStyles.EQUIPMENT_RECIPE_ID,
+) : CameraEffect(
     PREVIEW or if (includeVideoTarget) VIDEO_CAPTURE else 0,
     TRANSFORMATION_CAMERA_AND_SURFACE_ROTATION,
     OUTPUT_OPTION_ONE_FOR_EACH_TARGET,
     Executor { it.run() },
-    FilmSurfaceProcessor(requireNotNull(BuiltInFilmVisualProfiles.resolve(recipe)) {
-        "No film visual profile exists for this recipe"
+    FilmSurfaceProcessor(requireNotNull(BuiltInVideoStyles.resolve(recipe, videoStyleId)) {
+        "No video visual profile exists for this recipe and style"
     }),
     androidx.core.util.Consumer { },
 ) {

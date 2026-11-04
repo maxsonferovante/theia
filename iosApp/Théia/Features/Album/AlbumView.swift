@@ -358,9 +358,9 @@ struct AlbumDetailView: View {
 
     private func detailRow(_ label: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(label).foregroundStyle(.secondary)
+            Text(NSLocalizedString(label, comment: "Album metadata label")).foregroundStyle(.secondary)
             Spacer(minLength: 14)
-            Text(value).multilineTextAlignment(.trailing)
+            Text(NSLocalizedString(value, comment: "Album metadata value")).multilineTextAlignment(.trailing)
         }
         .font(.subheadline)
     }

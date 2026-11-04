@@ -104,22 +104,43 @@ enum GeotagAuthorizationState: Equatable {
     case unavailable
 }
 
+private enum LocationAuthorizationSnapshot: Sendable {
+    case notDetermined
+    case authorized
+    case denied
+    case restricted
+    case unavailable
+
+    init(_ status: CLAuthorizationStatus) {
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse: self = .authorized
+        case .notDetermined: self = .notDetermined
+        case .denied: self = .denied
+        case .restricted: self = .restricted
+        @unknown default: self = .unavailable
+        }
+    }
+}
+
 /// One-shot location adapter. It never requests permission or location until an explicit call.
 @MainActor
-final class GeotagLocationAdapter: NSObject, ObservableObject, CLLocationManagerDelegate {
+final class GeotagLocationAdapter: NSObject, ObservableObject {
     @Published private(set) var authorizationState: GeotagAuthorizationState = .notRequested
     @Published private(set) var latestMetadata: LocalGeotagMetadata?
     @Published private(set) var isRequestingLocation = false
     @Published private(set) var errorMessage: String?
 
     private let manager: CLLocationManager
+    private let locationDelegate: LocationDelegateProxy
     private var hasExplicitRequestPending = false
     private var pendingContinuation: CheckedContinuation<LocalGeotagMetadata?, Never>?
 
     override init() {
         manager = CLLocationManager()
+        locationDelegate = LocationDelegateProxy()
         super.init()
-        manager.delegate = self
+        locationDelegate.adapter = self
+        manager.delegate = locationDelegate
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         synchronizeAuthorizationState()
     }
@@ -169,11 +190,11 @@ final class GeotagLocationAdapter: NSObject, ObservableObject, CLLocationManager
         finishRequest(with: nil)
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        synchronizeAuthorizationState()
+    fileprivate func didChangeAuthorization(_ status: LocationAuthorizationSnapshot) {
+        synchronizeAuthorizationState(status)
         guard hasExplicitRequestPending else { return }
-        switch manager.authorizationStatus {
-        case .authorizedAlways, .authorizedWhenInUse:
+        switch status {
+        case .authorized:
             authorizationState = .authorized
             requestLocationNow()
         case .denied:
@@ -185,29 +206,21 @@ final class GeotagLocationAdapter: NSObject, ObservableObject, CLLocationManager
             errorMessage = NSLocalizedString("Location access is restricted on this device.", comment: "Location permission restricted")
             finishRequest(with: nil)
         case .notDetermined: break
-        @unknown default:
+        case .unavailable:
             authorizationState = .unavailable
             finishRequest(with: nil)
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard hasExplicitRequestPending, let location = locations.last else { return }
-        let metadata = LocalGeotagMetadata(
-            coordinate: LocalGeotagCoordinate(
-                latitude: location.coordinate.latitude,
-                longitude: location.coordinate.longitude
-            ),
-            recordedAt: location.timestamp,
-            precisionMeters: max(0, location.horizontalAccuracy)
-        )
+    fileprivate func didReceiveLocation(_ metadata: LocalGeotagMetadata) {
+        guard hasExplicitRequestPending else { return }
         latestMetadata = metadata
         manager.stopUpdatingLocation()
         finishRequest(with: metadata)
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        errorMessage = error.localizedDescription
+    fileprivate func didFailLocationRequest(message: String) {
+        errorMessage = message
         finishRequest(with: nil)
     }
 
@@ -224,13 +237,42 @@ final class GeotagLocationAdapter: NSObject, ObservableObject, CLLocationManager
         pendingContinuation = nil
     }
 
-    private func synchronizeAuthorizationState() {
-        switch manager.authorizationStatus {
-        case .authorizedAlways, .authorizedWhenInUse: authorizationState = .authorized
+    private func synchronizeAuthorizationState(_ snapshot: LocationAuthorizationSnapshot? = nil) {
+        switch snapshot ?? LocationAuthorizationSnapshot(manager.authorizationStatus) {
+        case .authorized: authorizationState = .authorized
         case .notDetermined: authorizationState = .notRequested
         case .denied: authorizationState = .denied
         case .restricted: authorizationState = .restricted
-        @unknown default: authorizationState = .unavailable
+        case .unavailable: authorizationState = .unavailable
         }
+    }
+}
+
+/// Core Location callbacks arrive on the run loop where the manager was created. This proxy
+/// converts framework objects to Sendable values before handing state changes to the main actor.
+private final class LocationDelegateProxy: NSObject, CLLocationManagerDelegate {
+    weak var adapter: GeotagLocationAdapter?
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let snapshot = LocationAuthorizationSnapshot(manager.authorizationStatus)
+        Task { @MainActor [weak adapter] in adapter?.didChangeAuthorization(snapshot) }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        let metadata = LocalGeotagMetadata(
+            coordinate: LocalGeotagCoordinate(
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude
+            ),
+            recordedAt: location.timestamp,
+            precisionMeters: max(0, location.horizontalAccuracy)
+        )
+        Task { @MainActor [weak adapter] in adapter?.didReceiveLocation(metadata) }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        let message = error.localizedDescription
+        Task { @MainActor [weak adapter] in adapter?.didFailLocationRequest(message: message) }
     }
 }

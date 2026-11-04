@@ -28,6 +28,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -78,6 +80,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.theia.android.R
+import app.theia.domain.catalog.BuiltInVideoStyles
 import app.theia.domain.model.CaptureRecipe
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.delay
@@ -116,6 +119,7 @@ fun VideoCaptureScreen(
     var microphoneGranted by remember(context) { mutableStateOf(context.hasRuntimePermission(Manifest.permission.RECORD_AUDIO)) }
     var audioDenied by remember { mutableStateOf(false) }
     var includeAudio by remember { mutableStateOf(false) }
+    var selectedVideoStyleId by remember { mutableStateOf(BuiltInVideoStyles.EQUIPMENT_RECIPE_ID) }
     var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var session by remember { mutableStateOf<VideoCameraSession?>(null) }
@@ -150,7 +154,7 @@ fun VideoCaptureScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(previewView, cameraGranted, lensFacing, lifecycleOwner) {
+    LaunchedEffect(previewView, cameraGranted, lensFacing, lifecycleOwner, recipe, selectedVideoStyleId) {
         val view = previewView
         if (view == null || !cameraGranted) {
             session = null
@@ -172,7 +176,11 @@ fun VideoCaptureScreen(
                 .also { it.surfaceProvider = view.surfaceProvider }
             fun bind(prefer30Fps: Boolean): Pair<VideoCapture<Recorder>, FilmPreviewEffect> {
                 val capture = buildVideoCapture(prefer30Fps)
-                val effect = FilmPreviewEffect(recipe, includeVideoTarget = true)
+                val effect = FilmPreviewEffect(
+                    recipe,
+                    includeVideoTarget = true,
+                    videoStyleId = selectedVideoStyleId,
+                )
                 val group = androidx.camera.core.UseCaseGroup.Builder()
                     .addUseCase(preview)
                     .addUseCase(capture)
@@ -280,6 +288,30 @@ fun VideoCaptureScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    Text(stringResource(R.string.video_style_label), color = VideoIvory, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        val styleChoices = listOf(
+                            BuiltInVideoStyles.EQUIPMENT_RECIPE_ID to R.string.video_style_recipe,
+                        ) + BuiltInVideoStyles.presets.map { preset ->
+                            val resource = when (preset.localizationKey) {
+                                "video_style_cinematic_warm" -> R.string.video_style_cinematic_warm
+                                "video_style_moonlit_monochrome" -> R.string.video_style_moonlit_monochrome
+                                else -> null
+                            }
+                            preset.id to resource
+                        }.filter { (_, nameResource) -> nameResource != null }
+                        styleChoices.forEach { (styleId, nameResource) ->
+                            FilterChip(
+                                selected = selectedVideoStyleId == styleId,
+                                onClick = { if (activeRecording == null) selectedVideoStyleId = styleId },
+                                enabled = activeRecording == null,
+                                label = { Text(stringResource(requireNotNull(nameResource)), maxLines = 1) },
+                            )
+                        }
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -337,6 +369,8 @@ fun VideoCaptureScreen(
                                     context = context,
                                     capture = current.videoCapture,
                                     executor = ContextCompat.getMainExecutor(context),
+                                    recipe = recipe,
+                                    videoStyleId = selectedVideoStyleId,
                                     withAudio = includeAudio && microphoneGranted,
                                     onRecording = { activeRecording = it },
                                     onDuration = { recordedMillis = it.coerceAtMost(MAX_RECORDING_DURATION_MILLIS) },
@@ -374,6 +408,7 @@ data class VideoCaptureResult(
     val heightPixels: Int,
     val framesPerSecond: Int,
     val includesAudio: Boolean,
+    val videoStyleId: String,
 )
 
 private data class VideoCameraSession(
@@ -425,6 +460,8 @@ private fun startVideoRecording(
     context: Context,
     capture: VideoCapture<Recorder>,
     executor: Executor,
+    recipe: CaptureRecipe,
+    videoStyleId: String,
     withAudio: Boolean,
     onRecording: (Recording) -> Unit,
     onDuration: (Long) -> Unit,
@@ -435,6 +472,17 @@ private fun startVideoRecording(
     val values = ContentValues().apply {
         put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
         put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+        put(
+            MediaStore.Video.Media.DESCRIPTION,
+            org.json.JSONObject()
+                .put("version", 1)
+                .put("recipe", recipe.id.value)
+                .put("body", recipe.bodyId.value)
+                .put("lens", recipe.lensId.value)
+                .put("film", recipe.filmStockId.value)
+                .put("video_style", videoStyleId)
+                .toString(),
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/Théia")
             put(MediaStore.MediaColumns.IS_PENDING, 1)
@@ -486,6 +534,7 @@ private fun startVideoRecording(
                                 heightPixels = size?.height ?: 1080,
                                 framesPerSecond = capture.targetFrameRate.upper,
                                 includesAudio = withAudio,
+                                videoStyleId = videoStyleId,
                             ),
                         ))
                     } else {

@@ -296,6 +296,10 @@
 "capture_error_photo_save" = "The photo could not be saved. Your capture was not added to the gallery. Try again.";
 "capture_error_photo_prepare" = "The camera could not prepare this photo. Try capturing again.";
 "video_title" = "Video";
+"video_style_label" = "Video look";
+"video_style_recipe" = "Equipment";
+"video_style_cinematic_warm" = "Warm cinema";
+"video_style_moonlit_monochrome" = "Moonlight mono";
 "video_saving" = "Saving video…";
 "video_audio_on" = "Audio on";
 "video_audio_off" = "Audio off";
@@ -458,3 +462,14 @@
 "Allow Photos access to share this capture." = "Allow Photos access to share this capture.";
 "This Photos item is unavailable on this device. Download it to Photos before sharing." = "This Photos item is unavailable on this device. Download it to Photos before sharing.";
 "album_location_plot_title" = "Saved locations";
+"Duration" = "Duration";
+"Audio" = "Audio";
+"On" = "On";
+"Off" = "Off";
+"Video" = "Video";
+"Opens capture details in the Lab." = "Opens capture details in the Lab.";
+"Closes capture details." = "Closes capture details.";
+"Shares the media file and its camera recipe." = "Shares the media file and its camera recipe.";
+"Recipe ID" = "Recipe ID";
+"Roll" = "Roll";
+"Done" = "Done";

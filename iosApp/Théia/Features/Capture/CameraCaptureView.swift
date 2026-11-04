@@ -93,6 +93,10 @@ struct CameraCaptureView: View {
         }
         .preferredColorScheme(.dark)
         .task { camera.prepareCameraPermissionState() }
+        .modifier(HardwareCaptureEventModifier(
+            isEnabled: camera.isAuthorized && camera.session.isRunning && !camera.isCapturing && !camera.isSaving && !isResolvingGeotag,
+            action: captureFromShutter
+        ))
         .onDisappear { camera.stopSession() }
         .onAppear { horizon.start() }
         .onDisappear { horizon.stop() }
@@ -234,19 +238,7 @@ struct CameraCaptureView: View {
                     camera.cancelCountdown()
                     return
                 }
-                Task {
-                    isResolvingGeotag = geotaggingEnabled
-                    let metadata = geotaggingEnabled
-                        ? await geotagLocation.requestOneShotLocationAfterOptIn()
-                        : nil
-                    isResolvingGeotag = false
-                    await camera.capture(
-                        recipe: recipe,
-                        geotagMetadata: metadata,
-                        timerSeconds: camera.timerSeconds,
-                        playShutterSound: shutterSoundEnabled
-                    )
-                }
+                captureFromShutter()
             } label: {
                 ZStack {
                     Circle().stroke(.white, lineWidth: 4).frame(width: 74, height: 74)
@@ -269,6 +261,23 @@ struct CameraCaptureView: View {
         .padding(.bottom, 32)
         .background(LinearGradient(colors: [.clear, .black.opacity(0.72)], startPoint: .top, endPoint: .bottom))
         .foregroundStyle(.white)
+    }
+
+    private func captureFromShutter() {
+        guard camera.isAuthorized, !camera.isCapturing, !camera.isSaving, !isResolvingGeotag else { return }
+        Task {
+            isResolvingGeotag = geotaggingEnabled
+            let metadata = geotaggingEnabled
+                ? await geotagLocation.requestOneShotLocationAfterOptIn()
+                : nil
+            isResolvingGeotag = false
+            await camera.capture(
+                recipe: recipe,
+                geotagMetadata: metadata,
+                timerSeconds: camera.timerSeconds,
+                playShutterSound: shutterSoundEnabled
+            )
+        }
     }
 
     @ViewBuilder
@@ -296,6 +305,22 @@ struct CameraCaptureView: View {
         }
         .padding(32)
         .foregroundStyle(.white)
+    }
+}
+
+private struct HardwareCaptureEventModifier: ViewModifier {
+    let isEnabled: Bool
+    let action: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onCameraCaptureEvent(isEnabled: isEnabled) { event in
+                if event.phase == .ended { action() }
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -351,7 +376,8 @@ private final class CameraCaptureModel: ObservableObject {
         }
     }
 
-    @Published private(set) var session = AVCaptureSession()
+    private let engine = CameraCaptureEngine()
+    var session: AVCaptureSession { engine.session }
     @Published private(set) var isAuthorized = false
     @Published private(set) var permissionDenied = false
     @Published private(set) var shouldExplainCameraPermission = false
@@ -377,9 +403,6 @@ private final class CameraCaptureModel: ObservableObject {
     @Published private(set) var savedRecord: NativeCaptureRecord?
 
     private let sessionQueue = DispatchQueue(label: "app.theia.camera.session")
-    private let photoOutput = AVCapturePhotoOutput()
-    private var activeDevice: AVCaptureDevice?
-    private var currentInput: AVCaptureDeviceInput?
     private var pendingRecipe: NativeCaptureRecipe?
     private var photoDelegate: PhotoCaptureDelegate?
     private var countdownCancelled = false
@@ -419,10 +442,11 @@ private final class CameraCaptureModel: ObservableObject {
     func cancelCountdown() { countdownCancelled = true }
 
     func stopSession() {
-        sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
-            self.session.stopRunning()
-            Task { @MainActor in self.isAuthorized = false }
+        let engine = engine
+        sessionQueue.async { [weak self, engine] in
+            guard engine.session.isRunning else { return }
+            engine.session.stopRunning()
+            Task { @MainActor in self?.isAuthorized = false }
         }
     }
 
@@ -433,29 +457,30 @@ private final class CameraCaptureModel: ObservableObject {
     }
 
     func switchCamera() {
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
-            let nextPosition: AVCaptureDevice.Position = self.currentInput?.device.position == .back ? .front : .back
+        let engine = engine
+        sessionQueue.async { [weak self, engine] in
+            let nextPosition: AVCaptureDevice.Position = engine.currentInput?.device.position == .back ? .front : .back
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: nextPosition),
                   let newInput = try? AVCaptureDeviceInput(device: device) else { return }
-            self.session.beginConfiguration()
-            if let currentInput = self.currentInput { self.session.removeInput(currentInput) }
-            if self.session.canAddInput(newInput) {
-                self.session.addInput(newInput)
-                self.currentInput = newInput
-                self.activeDevice = device
-                self.updateZoomRange(device)
-                self.updateCaptureCapabilities(device)
-            } else if let currentInput = self.currentInput, self.session.canAddInput(currentInput) {
-                self.session.addInput(currentInput)
+            engine.session.beginConfiguration()
+            if let currentInput = engine.currentInput { engine.session.removeInput(currentInput) }
+            if engine.session.canAddInput(newInput) {
+                engine.session.addInput(newInput)
+                engine.currentInput = newInput
+                engine.activeDevice = device
+                self?.updateZoomRange(device)
+                self?.updateCaptureCapabilities(device, photoOutput: engine.photoOutput)
+            } else if let currentInput = engine.currentInput, engine.session.canAddInput(currentInput) {
+                engine.session.addInput(currentInput)
             }
-            self.session.commitConfiguration()
+            engine.session.commitConfiguration()
         }
     }
 
     func focus(at point: CGPoint) {
-        sessionQueue.async { [weak self] in
-            guard let self, let device = self.activeDevice else { return }
+        let engine = engine
+        sessionQueue.async { [weak self, engine] in
+            guard let device = engine.activeDevice else { return }
             do {
                 try device.lockForConfiguration()
                 if device.isFocusPointOfInterestSupported {
@@ -467,46 +492,50 @@ private final class CameraCaptureModel: ObservableObject {
                     device.exposureMode = device.isExposureModeSupported(.continuousAutoExposure) ? .continuousAutoExposure : .autoExpose
                 }
                 device.unlockForConfiguration()
-            } catch { self.present(error) }
+            } catch { Task { @MainActor in self?.present(error) } }
         }
     }
 
     func applyZoom() {
         let factor = zoomFactor
-        sessionQueue.async { [weak self] in
-            guard let self, let device = self.activeDevice else { return }
+        let engine = engine
+        sessionQueue.async { [weak self, engine] in
+            guard let device = engine.activeDevice else { return }
             do {
                 try device.lockForConfiguration()
                 device.videoZoomFactor = min(max(factor, 1), device.activeFormat.videoMaxZoomFactor)
                 device.unlockForConfiguration()
-            } catch { self.present(error) }
+            } catch { Task { @MainActor in self?.present(error) } }
         }
     }
 
     func applyExposureBias() {
         let requested = Float(exposureBias)
-        sessionQueue.async { [weak self] in
-            guard let self, let device = self.activeDevice else { return }
+        let engine = engine
+        sessionQueue.async { [weak self, engine] in
+            guard let device = engine.activeDevice else { return }
             do {
                 try device.lockForConfiguration()
                 let clamped = min(max(requested, device.minExposureTargetBias), device.maxExposureTargetBias)
                 device.setExposureTargetBias(clamped, completionHandler: nil)
                 device.unlockForConfiguration()
-            } catch { self.present(error) }
+            } catch { Task { @MainActor in self?.present(error) } }
         }
     }
 
     func toggleFocusExposureLock() {
-        sessionQueue.async { [weak self] in
-            guard let self, let device = self.activeDevice else { return }
+        let engine = engine
+        let isLocked = isFocusExposureLocked
+        sessionQueue.async { [weak self, engine] in
+            guard let device = engine.activeDevice else { return }
             do {
                 try device.lockForConfiguration()
-                if self.isFocusExposureLocked {
+                if isLocked {
                     if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
                     else if device.isFocusModeSupported(.autoFocus) { device.focusMode = .autoFocus }
                     if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
                     else if device.isExposureModeSupported(.autoExpose) { device.exposureMode = .autoExpose }
-                    Task { @MainActor in self.isFocusExposureLocked = false }
+                    Task { @MainActor in self?.isFocusExposureLocked = false }
                 } else {
                     var lockedSomething = false
                     if device.isFocusModeSupported(.locked) {
@@ -517,10 +546,10 @@ private final class CameraCaptureModel: ObservableObject {
                         device.exposureMode = .locked
                         lockedSomething = true
                     }
-                    Task { @MainActor in self.isFocusExposureLocked = lockedSomething }
+                    Task { @MainActor in self?.isFocusExposureLocked = lockedSomething }
                 }
                 device.unlockForConfiguration()
-            } catch { self.present(error) }
+            } catch { Task { @MainActor in self?.present(error) } }
         }
     }
 
@@ -550,9 +579,6 @@ private final class CameraCaptureModel: ObservableObject {
                 }
                 countdownSeconds = nil
             }
-            let settings = AVCapturePhotoSettings()
-            settings.flashMode = activeDevice?.hasFlash == true ? flashMode.photoMode : .off
-            settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
             pendingRecipe = recipe
             let delegate = PhotoCaptureDelegate { [weak self] result in
                 Task { @MainActor in
@@ -568,15 +594,22 @@ private final class CameraCaptureModel: ObservableObject {
                 }
             }
             photoDelegate = delegate
-            sessionQueue.async { [weak self] in
-                guard let self else { return }
-                guard self.session.isRunning else {
-                    Task { @MainActor in self.isCapturing = false; self.present(CameraError.sessionUnavailable) }
+            let engine = engine
+            let requestedFlashMode = flashMode.photoMode
+            sessionQueue.async { [weak self, engine, delegate] in
+                guard engine.session.isRunning else {
+                    Task { @MainActor in
+                        self?.isCapturing = false
+                        self?.present(CameraError.sessionUnavailable)
+                    }
                     return
                 }
+                let settings = AVCapturePhotoSettings()
+                settings.flashMode = engine.activeDevice?.hasFlash == true ? requestedFlashMode : .off
+                settings.maxPhotoDimensions = engine.photoOutput.maxPhotoDimensions
                 // The system shutter sound uses the device's current silent/volume behavior; no audio session is changed.
                 if playShutterSound { AudioServicesPlaySystemSound(1108) }
-                self.photoOutput.capturePhoto(with: settings, delegate: delegate)
+                engine.photoOutput.capturePhoto(with: settings, delegate: delegate)
             }
         } catch {
             countdownSeconds = nil
@@ -591,39 +624,39 @@ private final class CameraCaptureModel: ObservableObject {
     }
 
     private func configureAndStart() {
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
-            guard !self.session.isRunning else {
-                Task { @MainActor in self.isAuthorized = true }
+        let engine = engine
+        sessionQueue.async { [weak self, engine] in
+            guard !engine.session.isRunning else {
+                Task { @MainActor in self?.isAuthorized = true }
                 return
             }
-            if self.currentInput != nil {
-                self.session.startRunning()
-                Task { @MainActor in self.isAuthorized = true }
+            if engine.currentInput != nil {
+                engine.session.startRunning()
+                Task { @MainActor in self?.isAuthorized = true }
                 return
             }
-            self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
+            engine.session.beginConfiguration()
+            engine.session.sessionPreset = .photo
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                   let input = try? AVCaptureDeviceInput(device: device),
-                  self.session.canAddInput(input), self.session.canAddOutput(self.photoOutput) else {
-                self.session.commitConfiguration()
-                Task { @MainActor in self.present(CameraError.cameraUnavailable) }
+                  engine.session.canAddInput(input), engine.session.canAddOutput(engine.photoOutput) else {
+                engine.session.commitConfiguration()
+                Task { @MainActor in self?.present(CameraError.cameraUnavailable) }
                 return
             }
-            self.session.addInput(input)
-            self.session.addOutput(self.photoOutput)
-            self.currentInput = input
-            self.activeDevice = device
-            self.updateZoomRange(device)
-            self.updateCaptureCapabilities(device)
-            self.session.commitConfiguration()
-            self.session.startRunning()
-            Task { @MainActor in self.isAuthorized = true }
+            engine.session.addInput(input)
+            engine.session.addOutput(engine.photoOutput)
+            engine.currentInput = input
+            engine.activeDevice = device
+            self?.updateZoomRange(device)
+            self?.updateCaptureCapabilities(device, photoOutput: engine.photoOutput)
+            engine.session.commitConfiguration()
+            engine.session.startRunning()
+            Task { @MainActor in self?.isAuthorized = true }
         }
     }
 
-    private func updateZoomRange(_ device: AVCaptureDevice) {
+    nonisolated private func updateZoomRange(_ device: AVCaptureDevice) {
         let maxZoom = min(Double(device.activeFormat.videoMaxZoomFactor), 10)
         Task { @MainActor in
             minimumZoom = 1
@@ -632,7 +665,7 @@ private final class CameraCaptureModel: ObservableObject {
         }
     }
 
-    private func updateCaptureCapabilities(_ device: AVCaptureDevice) {
+    nonisolated private func updateCaptureCapabilities(_ device: AVCaptureDevice, photoOutput: AVCapturePhotoOutput) {
         let dimensions = device.activeFormat.supportedMaxPhotoDimensions.max {
             Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height)
         }
@@ -710,7 +743,17 @@ private final class CameraCaptureModel: ObservableObject {
     }
 }
 
-private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+/// AVFoundation session configuration and device selection are accessed on the capture session queue.
+/// The session is also handed to AVCaptureVideoPreviewLayer for presentation; AVCaptureSession owns
+/// synchronization for that read-only preview connection.
+private final class CameraCaptureEngine: @unchecked Sendable {
+    let session = AVCaptureSession()
+    let photoOutput = AVCapturePhotoOutput()
+    var activeDevice: AVCaptureDevice?
+    var currentInput: AVCaptureDeviceInput?
+}
+
+private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
     private let completion: (Result<Data, Error>) -> Void
 
     init(completion: @escaping (Result<Data, Error>) -> Void) { self.completion = completion }

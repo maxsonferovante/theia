@@ -3,15 +3,19 @@ package app.theia.android
 import android.net.Uri
 import android.Manifest
 import android.app.Activity
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.os.LocaleList
 import android.app.LocaleManager
 import androidx.activity.ComponentActivity
+import androidx.core.view.WindowCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -33,8 +37,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -74,8 +80,29 @@ import kotlinx.coroutines.CompletableDeferred
 private enum class AppDestination { ONBOARDING, CAMERA, VIDEO, WORKBENCH, ALBUM, SETTINGS }
 
 class MainActivity : ComponentActivity() {
+    var volumeShutterEnabled = false
+    var volumeShutterRequests by mutableIntStateOf(0)
+        private set
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isVolumeShutter = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+        if (volumeShutterEnabled && isVolumeShutter && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            volumeShutterRequests++
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val brandNavy = Color.rgb(24, 35, 68)
+        window.setBackgroundDrawable(ColorDrawable(brandNavy))
+        window.statusBarColor = brandNavy
+        window.navigationBarColor = brandNavy
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
         setContent { TheiaAppScreen() }
     }
 }
@@ -130,6 +157,12 @@ private fun TheiaAppScreen() {
     var latestPhoto by remember { mutableStateOf<Uri?>(null) }
     var latestPhotoVisible by remember { mutableStateOf(false) }
     var remainingExposures by remember { mutableStateOf<Int?>(null) }
+    var cameraShutterAvailable by remember { mutableStateOf(false) }
+
+    SideEffect {
+        (context as? MainActivity)?.volumeShutterEnabled =
+            destination == AppDestination.CAMERA && cameraShutterAvailable
+    }
 
     LaunchedEffect(destination, rollService) {
         if (destination == AppDestination.CAMERA) {
@@ -154,7 +187,10 @@ private fun TheiaAppScreen() {
     }
 
     MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Surface(
+            modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
+            color = androidx.compose.ui.graphics.Color(0xFF182344),
+        ) {
             when (destination) {
                 AppDestination.ONBOARDING -> OnboardingScreen(
                     onGetStarted = {
@@ -201,6 +237,8 @@ private fun TheiaAppScreen() {
                     }
                     CameraCaptureScreen(
                         recipe = recipe,
+                        externalShutterRequest = (context as? MainActivity)?.volumeShutterRequests ?: 0,
+                        onShutterAvailabilityChanged = { cameraShutterAvailable = it },
                         remainingExposures = remainingExposures,
                         latestPhotoVisible = latestPhotoVisible,
                         shutterSoundEnabled = preferences.shutterSoundEnabled,

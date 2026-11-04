@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="video_style_label">Estilo visual</string>
+    <string name="video_style_recipe">Equipamento</string>
+    <string name="video_style_cinematic_warm">Cinema quente</string>
+    <string name="video_style_moonlit_monochrome">Lunar mono</string>
     <string name="video_capture_title">Captura de vídeo</string>
     <string name="video_capture_description">Até 60 segundos · 1080p quando disponível</string>
     <string name="video_camera_permission_explanation">O Théia precisa de acesso à câmera para gravar vídeos. As gravações são salvas na sua galeria.</string>

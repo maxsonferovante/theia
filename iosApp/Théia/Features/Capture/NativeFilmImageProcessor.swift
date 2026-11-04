@@ -93,7 +93,10 @@ struct NativeResolvedVisualParameters: Equatable, Sendable {
 
 /// Adapts the shared profile resolver to the Core Image renderer's validated value type.
 enum NativeFilmVisualProfileCatalog {
-    static func resolve(recipe: NativeCaptureRecipe) throws -> NativeResolvedVisualParameters? {
+    static func resolve(
+        recipe: NativeCaptureRecipe,
+        videoStyleID: String = "equipment-recipe"
+    ) throws -> NativeResolvedVisualParameters? {
         let sharedRecipeID = Self.sharedRecipeID(
             bodyID: recipe.cameraBodyID,
             lensID: recipe.lensID,
@@ -105,7 +108,7 @@ enum NativeFilmVisualProfileCatalog {
             filmStockId: recipe.filmStockID,
             id: sharedRecipeID
         )
-        guard let resolved = BuiltInFilmVisualProfiles.shared.resolve(recipe: sharedRecipe) else {
+        guard let resolved = BuiltInVideoStyles.shared.resolve(recipe: sharedRecipe, styleId: videoStyleID) else {
             return nil
         }
         return try NativeResolvedVisualParameters(

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -66,7 +67,7 @@ fun HorizonLevelOverlay(modifier: Modifier = Modifier) {
     }
 
     if (sensor == null) {
-        Surface(modifier, color = Color(0xCC182344), shape = RoundedCornerShape(10.dp)) {
+        Surface(modifier.widthIn(max = 340.dp), color = Color(0xCC182344), shape = RoundedCornerShape(10.dp)) {
             Text(
                 stringResource(R.string.camera_horizon_unavailable),
                 color = Color(0xFFE7D7B7),
@@ -85,7 +86,7 @@ fun HorizonLevelOverlay(modifier: Modifier = Modifier) {
     )
     val description = "${stringResource(R.string.camera_horizon_level)}. $axes"
     Surface(
-        modifier.semantics { contentDescription = description },
+        modifier.widthIn(max = 340.dp).semantics { contentDescription = description },
         color = Color(0xCC182344),
         shape = RoundedCornerShape(12.dp),
     ) {

@@ -157,7 +157,7 @@ private fun DrawScope.drawLens(seed: Int, colors: List<Color>) {
     val glassRadius = barrelHeight * 0.47f
     drawCircle(colors[2], glassRadius, glassCenter)
     drawCircle(colors[1], glassRadius * 0.78f, glassCenter)
-    drawCircle(colors[6], glassRadius * 0.56f, glassCenter)
+    drawCircle(colors[4], glassRadius * 0.56f, glassCenter)
     drawCircle(colors[0].copy(alpha = 0.9f), glassRadius * 0.3f, glassCenter + Offset(glassRadius * 0.16f, -glassRadius * 0.15f))
     drawCircle(colors[2].copy(alpha = 0.8f), glassRadius * 0.1f, glassCenter + Offset(-glassRadius * 0.2f, -glassRadius * 0.24f))
 

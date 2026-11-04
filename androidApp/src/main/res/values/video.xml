@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="video_style_label">Visual style</string>
+    <string name="video_style_recipe">Equipment</string>
+    <string name="video_style_cinematic_warm">Warm cinema</string>
+    <string name="video_style_moonlit_monochrome">Moonlight mono</string>
     <string name="video_capture_title">Video capture</string>
     <string name="video_capture_description">Up to 60 seconds · 1080p when supported</string>
     <string name="video_camera_permission_explanation">Théia needs camera access to record video. Recordings are saved to your photo library.</string>
