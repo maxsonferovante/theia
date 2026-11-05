@@ -6,7 +6,6 @@ import android.app.Activity
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -27,16 +26,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -48,8 +50,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.theia.android.capture.CameraCaptureScreen
 import app.theia.android.capture.VideoCaptureScreen
 import app.theia.android.capture.writeRecipeMetadata
@@ -61,7 +69,7 @@ import app.theia.android.settings.AndroidUserPreferencesStore
 import app.theia.android.settings.OnboardingScreen
 import app.theia.android.settings.SettingsScreen
 import app.theia.android.settings.openApplicationPermissionSettings
-import app.theia.android.workbench.WorkbenchScreen
+import app.theia.android.workbench.RecipePickerSheet
 import app.theia.android.roll.AndroidFilmRollRepository
 import app.theia.android.roll.AndroidFilmRollService
 import app.theia.android.geotag.AndroidGeotagService
@@ -78,7 +86,7 @@ import android.widget.Toast
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CompletableDeferred
 
-private enum class AppDestination { ONBOARDING, CAMERA, VIDEO, WORKBENCH, ALBUM, SETTINGS }
+private enum class AppDestination { ONBOARDING, CAMERA, VIDEO, ALBUM, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     var volumeShutterEnabled = false
@@ -154,7 +162,11 @@ private fun TheiaAppScreen() {
         )
     }
     var recipe by remember { mutableStateOf(initialRecipe) }
+    var recipeDraft by remember { mutableStateOf(initialRecipe) }
     var destination by remember { mutableStateOf(if (hasCompletedOnboarding) AppDestination.CAMERA else AppDestination.ONBOARDING) }
+    var recipePickerVisible by remember { mutableStateOf(false) }
+    var pendingRecipe by remember { mutableStateOf<CaptureRecipe?>(null) }
+    var pendingRollExposureCount by remember { mutableIntStateOf(0) }
     var latestPhoto by remember { mutableStateOf<Uri?>(null) }
     var latestPhotoVisible by remember { mutableStateOf(false) }
     var remainingExposures by remember { mutableStateOf<Int?>(null) }
@@ -162,7 +174,7 @@ private fun TheiaAppScreen() {
 
     SideEffect {
         (context as? MainActivity)?.volumeShutterEnabled =
-            destination == AppDestination.CAMERA && cameraShutterAvailable
+            destination == AppDestination.CAMERA && cameraShutterAvailable && !recipePickerVisible && pendingRecipe == null
     }
 
     LaunchedEffect(destination, rollService) {
@@ -206,43 +218,23 @@ private fun TheiaAppScreen() {
                     },
                 )
                 AppDestination.CAMERA -> Column(Modifier.fillMaxSize()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Button(onClick = { destination = AppDestination.WORKBENCH }, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.open_workbench))
-                        }
-                        Button(onClick = { destination = AppDestination.ALBUM }, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.open_album))
-                        }
-                        Button(onClick = { destination = AppDestination.VIDEO }, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.open_video))
-                        }
-                        Button(onClick = { destination = AppDestination.SETTINGS }, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.open_settings))
-                        }
-                    }
-                    latestPhoto?.takeIf { latestPhotoVisible }?.let { photo ->
-                        Button(
-                            onClick = {
-                                runCatching {
-                                    context.startActivity(
-                                        Intent(Intent.ACTION_VIEW).setDataAndType(photo, "image/jpeg")
-                                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
-                                    )
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        ) { Text(stringResource(R.string.latest_original_saved, photo.lastPathSegment ?: photo.toString())) }
-                    }
+                    CameraEntryBar(
+                        recipe = if (recipePickerVisible) recipeDraft else recipe,
+                        onOpenRecipe = {
+                            recipeDraft = recipe
+                            recipePickerVisible = true
+                        },
+                        onOpenAlbum = { destination = AppDestination.ALBUM },
+                        onOpenSettings = { destination = AppDestination.SETTINGS },
+                    )
                     CameraCaptureScreen(
-                        recipe = recipe,
+                        recipe = if (recipePickerVisible) recipeDraft else recipe,
                         externalShutterRequest = (context as? MainActivity)?.volumeShutterRequests ?: 0,
                         onShutterAvailabilityChanged = { cameraShutterAvailable = it },
                         remainingExposures = remainingExposures,
                         latestPhotoVisible = latestPhotoVisible,
                         shutterSoundEnabled = preferences.shutterSoundEnabled,
+                        onOpenVideo = { destination = AppDestination.VIDEO },
                         onPhotoSaved = { uri, recipe ->
                             latestPhoto = uri
                             latestPhotoVisible = false
@@ -277,23 +269,52 @@ private fun TheiaAppScreen() {
                         },
                         modifier = Modifier.weight(1f),
                     )
+                    if (recipePickerVisible) {
+                        RecipePickerSheet(
+                            catalog = BuiltInEquipmentCatalog,
+                            selectedRecipe = recipeDraft,
+                            onDismiss = {
+                                recipeDraft = recipe
+                                recipePickerVisible = false
+                            },
+                            onDraftChange = { recipeDraft = it },
+                            onApply = { selected ->
+                                if (selected == recipe) {
+                                    recipeDraft = recipe
+                                    recipePickerVisible = false
+                                } else {
+                                    coroutineScope.launch {
+                                        val active = rollService.activeRoll()
+                                        if (active != null && active.recipe != selected && active.roll.photoIds.isNotEmpty()) {
+                                            pendingRecipe = selected
+                                            pendingRollExposureCount = active.roll.photoIds.size
+                                            recipeDraft = recipe
+                                            recipePickerVisible = false
+                                        } else {
+                                            runCatching {
+                                                if (active != null && active.recipe != selected) {
+                                                    rollService.createRoll(selected, FilmRollCapacity.EXPOSURES_24)
+                                                }
+                                                rollService.remainingExposures()
+                                            }.onSuccess {
+                                                recipe = selected
+                                                recipeDraft = selected
+                                                remainingExposures = it
+                                                recipePickerVisible = false
+                                            }.onFailure { failure ->
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.album_roll_action_failed, failure.localizedMessage ?: context.getString(R.string.album_rolls_title)),
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        )
+                    }
                 }
-
-                AppDestination.WORKBENCH -> WorkbenchScreen(
-                    catalog = BuiltInEquipmentCatalog,
-                    selectedRecipe = recipe,
-                    onRecipeSelected = { selected ->
-                        coroutineScope.launch {
-                            val active = rollService.activeRoll()
-                            if (active != null && active.recipe != selected) {
-                                rollService.createRoll(selected, FilmRollCapacity.EXPOSURES_24)
-                            }
-                            recipe = selected
-                            destination = AppDestination.CAMERA
-                        }
-                    },
-                    onBack = { destination = AppDestination.CAMERA },
-                )
 
                 AppDestination.VIDEO -> VideoCaptureScreen(
                     recipe = recipe,
@@ -353,8 +374,89 @@ private fun TheiaAppScreen() {
                     )
                 }
             }
+
+            pendingRecipe?.let { nextRecipe ->
+                AlertDialog(
+                    onDismissRequest = { pendingRecipe = null },
+                    title = { Text(stringResource(R.string.recipe_roll_switch_title)) },
+                    text = {
+                        val count = pluralStringResource(R.plurals.recipe_roll_switch_exposure_count, pendingRollExposureCount, pendingRollExposureCount)
+                        Text(stringResource(R.string.recipe_roll_switch_message, count))
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            coroutineScope.launch {
+                                runCatching {
+                                    val active = rollService.activeRoll()
+                                    if (active != null && active.recipe != nextRecipe) {
+                                        rollService.createRoll(nextRecipe, FilmRollCapacity.EXPOSURES_24)
+                                    }
+                                    rollService.remainingExposures()
+                                }.onSuccess {
+                                    recipe = nextRecipe
+                                    recipeDraft = nextRecipe
+                                    remainingExposures = it
+                                    pendingRecipe = null
+                                }.onFailure { failure ->
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.album_roll_action_failed, failure.localizedMessage ?: context.getString(R.string.album_rolls_title)),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        }) { Text(stringResource(R.string.recipe_roll_switch_confirm)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingRecipe = null }) { Text(stringResource(R.string.recipe_roll_switch_cancel)) }
+                    },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun CameraEntryBar(
+    recipe: CaptureRecipe,
+    onOpenRecipe: () -> Unit,
+    onOpenAlbum: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    val context = LocalContext.current
+    val body = BuiltInEquipmentCatalog.cameraBodies().firstOrNull { it.id == recipe.bodyId }?.nameKey?.let(context::resolveCatalogKey)
+    val lens = BuiltInEquipmentCatalog.lenses().firstOrNull { it.id == recipe.lensId }?.nameKey?.let(context::resolveCatalogKey)
+    val film = BuiltInEquipmentCatalog.filmStocks().firstOrNull { it.id == recipe.filmStockId }?.nameKey?.let(context::resolveCatalogKey)
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 8.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(
+            onClick = onOpenRecipe,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
+                contentDescription = context.getString(R.string.recipe_sheet_open_accessibility, body.orEmpty(), lens.orEmpty(), film.orEmpty())
+            },
+            colors = ButtonDefaults.textButtonColors(contentColor = ComposeColor(0xFFE7D7B7)),
+        ) {
+            Column {
+                Text(stringResource(R.string.recipe_sheet_current_label), color = ComposeColor(0xFFB6A58C), fontSize = 10.sp)
+                Text(listOfNotNull(body, lens, film).joinToString(" · "), maxLines = 1, color = ComposeColor(0xFFE7D7B7))
+            }
+        }
+        IconButton(onClick = onOpenAlbum, modifier = Modifier.size(48.dp).semantics { contentDescription = context.getString(R.string.open_album) }) {
+            Text("▦", fontSize = 21.sp, color = ComposeColor(0xFFE7D7B7))
+        }
+        IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp).semantics { contentDescription = context.getString(R.string.open_settings) }) {
+            Text("⚙", fontSize = 21.sp, color = ComposeColor(0xFFE7D7B7))
+        }
+    }
+}
+
+private fun android.content.Context.resolveCatalogKey(key: String): String {
+    val resourceName = key.replace('.', '_').replace('-', '_')
+    val resourceId = resources.getIdentifier(resourceName, "string", packageName)
+    return if (resourceId == 0) key.replace('_', ' ').replace('-', ' ') else getString(resourceId)
 }
 
 private fun DevicePermission.manifestPermission(): String = when (this) {

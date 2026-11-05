@@ -42,8 +42,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -70,7 +72,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -112,6 +113,7 @@ private val CameraStone = Color(0xFFB6A58C)
 fun CameraCaptureScreen(
     recipe: CaptureRecipe,
     onPhotoSaved: (Uri, CaptureRecipe) -> Unit,
+    onOpenVideo: () -> Unit = {},
     externalShutterRequest: Int = 0,
     onShutterAvailabilityChanged: (Boolean) -> Unit = {},
     remainingExposures: Int? = null,
@@ -150,6 +152,7 @@ fun CameraCaptureScreen(
     var timerSeconds by remember { mutableIntStateOf(0) }
     var timerCountdown by remember { mutableIntStateOf(0) }
     var gridEnabled by remember { mutableStateOf(false) }
+    var cameraControlsExpanded by remember { mutableStateOf(false) }
     var latestPhoto by remember { mutableStateOf<Uri?>(null) }
     var focusMessage by remember { mutableStateOf<Int?>(null) }
     var zoomRatio by remember(cameraSession) {
@@ -183,6 +186,12 @@ fun CameraCaptureScreen(
     val zoomStateDescription = stringResource(R.string.camera_zoom_value, String.format(Locale.getDefault(), "%.1f", zoomRatio))
     val exposureStateDescription = stringResource(R.string.camera_exposure_value, exposureIndex)
     val waitingStatus = stringResource(R.string.camera_status_starting)
+    val cameraChipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = CameraGold,
+        selectedLabelColor = CameraDeepSky,
+        containerColor = CameraDeepSky.copy(alpha = 0.72f),
+        labelColor = CameraIvory,
+    )
 
     SideEffect {
         onShutterAvailabilityChanged(permissionsGranted && cameraSession != null && cameraError == null && visualEffectError == null)
@@ -305,6 +314,10 @@ fun CameraCaptureScreen(
         if (flashAvailable) cameraSession?.imageCapture?.flashMode = flashChoice.cameraXValue
     }
 
+    LaunchedEffect(cameraSession, recipe) {
+        cameraSession?.effect?.updateRecipe(recipe)
+    }
+
     val captureExecutor = remember { Executors.newSingleThreadExecutor() }
     DisposableEffect(captureExecutor) {
         onDispose { captureExecutor.shutdown() }
@@ -409,36 +422,30 @@ fun CameraCaptureScreen(
                     HorizonLevelOverlay(Modifier.align(Alignment.Center).offset(y = (-140).dp))
                 }
 
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .background(CameraDeepSky.copy(alpha = 0.62f))
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = stringResource(R.string.camera_capture_title),
-                        color = CameraIvory,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                    if (captureMessage != null) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = stringResource(captureMessage!!),
-                            color = CameraGold,
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                        )
+                if (captureMessage != null || timerCountdown > 0 || focusMessage != null || remainingExposures != null) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .background(CameraDeepSky.copy(alpha = 0.62f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        captureMessage?.let {
+                            Text(
+                                text = stringResource(it),
+                                color = CameraGold,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                        }
+                        if (timerCountdown > 0) {
+                            Text(countdownStatus, color = CameraGold, fontSize = 18.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                        }
+                        focusMessage?.let { Text(stringResource(it), color = CameraGold, fontSize = 13.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+                        remainingExposures?.let { Text(stringResource(R.string.camera_roll_remaining, it), color = CameraIvory, fontSize = 14.sp) }
                     }
-                    if (timerCountdown > 0) {
-                        Text(countdownStatus, color = CameraGold, fontSize = 18.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    }
-                    focusMessage?.let { Text(stringResource(it), color = CameraGold, fontSize = 13.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
-                    remainingExposures?.let { Text(stringResource(R.string.camera_roll_remaining, it), color = CameraIvory, fontSize = 14.sp) }
                 }
 
                 if (!permissionsGranted) {
@@ -459,7 +466,7 @@ fun CameraCaptureScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(cameraError ?: visualEffectError.orEmpty(), color = CameraIvory, textAlign = TextAlign.Center)
-                        TextButton(onClick = { retryCamera++ }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        TextButton(onClick = { retryCamera++ }, modifier = Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = CameraIvory)) {
                             Text(stringResource(R.string.camera_retry))
                         }
                     }
@@ -475,6 +482,7 @@ fun CameraCaptureScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    if (cameraControlsExpanded) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -492,6 +500,7 @@ fun CameraCaptureScreen(
                                     label = { Text(stringResource(choice.labelResource())) },
                                     enabled = !captureInProgress,
                                     modifier = Modifier.heightIn(min = 48.dp),
+                                    colors = cameraChipColors,
                                 )
                             }
                         }
@@ -517,6 +526,7 @@ fun CameraCaptureScreen(
                                 },
                                 enabled = !captureInProgress && timerCountdown == 0,
                                 modifier = Modifier.heightIn(min = 48.dp),
+                                colors = cameraChipColors,
                             )
                         }
                         FilterChip(
@@ -524,6 +534,7 @@ fun CameraCaptureScreen(
                             onClick = { gridEnabled = !gridEnabled },
                             label = { Text(stringResource(R.string.camera_grid)) },
                             modifier = Modifier.heightIn(min = 48.dp),
+                            colors = cameraChipColors,
                         )
                     }
 
@@ -579,11 +590,12 @@ fun CameraCaptureScreen(
                             onClick = { focusAt((previewView?.width ?: 0) / 2f, (previewView?.height ?: 0) / 2f) },
                             enabled = cameraSession != null,
                             modifier = Modifier.heightIn(min = 48.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = CameraIvory),
                         ) {
                             Text(stringResource(R.string.camera_focus_center))
                         }
                         if (latestPhoto != null && latestPhotoVisible) {
-                            TextButton(onClick = { context.openLatestPhoto(latestPhoto!!) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            TextButton(onClick = { context.openLatestPhoto(latestPhoto!!) }, modifier = Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = CameraIvory)) {
                                 Text(stringResource(R.string.camera_view_latest))
                             }
                         }
@@ -597,9 +609,48 @@ fun CameraCaptureScreen(
                                 contentDescription = switchCameraDescription
                                 stateDescription = switchStateDescription
                             }.heightIn(min = 48.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = CameraIvory),
                         ) { Text(switchCameraDescription) }
                     }
 
+                    }
+                    } else {
+                        TextButton(
+                            onClick = { cameraControlsExpanded = true },
+                            enabled = permissionsGranted && cameraSession != null,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = CameraIvory),
+                        ) { Text(stringResource(R.string.camera_controls_show)) }
+                    }
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                        FilterChip(
+                            selected = true,
+                            onClick = {},
+                            label = { Text(stringResource(R.string.camera_mode_photo)) },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            colors = cameraChipColors,
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        FilterChip(
+                            selected = false,
+                            onClick = onOpenVideo,
+                            label = { Text(stringResource(R.string.camera_mode_video)) },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            colors = cameraChipColors,
+                        )
+                    }
+
+                    if (cameraControlsExpanded) {
+                        TextButton(
+                            onClick = { cameraControlsExpanded = false },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            colors = ButtonDefaults.textButtonColors(contentColor = CameraIvory),
+                        ) { Text(stringResource(R.string.camera_controls_hide)) }
                     }
 
                     IconButton(
@@ -653,7 +704,7 @@ private fun PermissionPanel(
         Button(onClick = onRequest, modifier = Modifier.heightIn(min = 48.dp)) {
             Text(stringResource(R.string.camera_request_permission))
         }
-        if (wasDenied) TextButton(onClick = onOpenSettings, modifier = Modifier.heightIn(min = 48.dp)) {
+        if (wasDenied) TextButton(onClick = onOpenSettings, modifier = Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = CameraIvory)) {
             Text(stringResource(R.string.camera_open_settings))
         }
     }

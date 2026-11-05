@@ -173,17 +173,17 @@ fun AlbumLabScreen(
 
     MaterialTheme {
         Surface(modifier.fillMaxSize(), color = AlbumNavy, contentColor = AlbumIvory) {
-            Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 18.dp)) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     if (onBack != null) TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(stringResource(R.string.album_back))
                     }
                     Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.album_lab_title), color = AlbumIvory, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+                        Text(stringResource(R.string.album_lab_title), color = AlbumIvory, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                         Text(stringResource(R.string.album_count, visible.size), color = AlbumStone, fontSize = 13.sp)
                     }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = search,
                     onValueChange = { search = it },
@@ -192,7 +192,7 @@ fun AlbumLabScreen(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AlbumFilter.values().forEach { option ->
                         FilterChip(
@@ -214,7 +214,7 @@ fun AlbumLabScreen(
                         )
                     }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 LazyColumn(
                     modifier = Modifier.testTag("album-photo-list"),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
