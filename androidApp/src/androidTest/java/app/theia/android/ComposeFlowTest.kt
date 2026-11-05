@@ -2,6 +2,7 @@ package app.theia.android
 
 import android.net.Uri
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.provider.Settings
@@ -15,11 +16,14 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.DeviceConfigurationOverride
 import androidx.compose.ui.test.FontScale
 import androidx.compose.ui.test.SemanticsMatcher
@@ -33,6 +37,7 @@ import app.theia.android.album.AlbumPhoto
 import app.theia.android.album.AlbumRollPanel
 import app.theia.android.album.rememberSystemAnimationsEnabled
 import app.theia.android.album.systemAnimationsEnabledForPlatform
+import app.theia.android.capture.CameraCaptureScreen
 import app.theia.android.capture.runVideoAlbumMetadataSave
 import app.theia.android.roll.AndroidFilmRollRepository
 import app.theia.android.roll.AndroidFilmRollService
@@ -48,6 +53,7 @@ import app.theia.domain.port.DevicePermission
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -118,16 +124,19 @@ class ComposeFlowTest {
 
     @Test
     fun onboardingCanBeSkippedAndExposesItsBrandMarkLabel() {
-        var skipped = false
+        val skipped = AtomicBoolean(false)
         compose.setContent {
-            OnboardingScreen(onGetStarted = {}, onSkip = { skipped = true })
+            OnboardingScreen(onGetStarted = {}, onSkip = { skipped.set(true) })
         }
 
         compose.onNodeWithContentDescription(context.getString(R.string.onboarding_mark_description))
             .assertExists()
-        compose.onNodeWithText(context.getString(R.string.onboarding_skip)).performClick()
+        compose.onNodeWithText(context.getString(R.string.onboarding_skip))
+            .assertHasClickAction()
+            .performScrollTo()
+            .performClick()
 
-        assertEquals(true, skipped)
+        assertEquals(true, skipped.get())
     }
 
     @Test
@@ -189,6 +198,48 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun cameraControlsRemainReachableWithLargeText() {
+        val recipe = CaptureRecipe(
+            bodyId = BuiltInEquipmentCatalog.cameraBodies().first().id,
+            lensId = BuiltInEquipmentCatalog.lenses().first().id,
+            filmStockId = BuiltInEquipmentCatalog.filmStocks().first().id,
+        )
+        val cameraPermission = android.Manifest.permission.CAMERA
+        val hadCameraPermission = context.checkSelfPermission(cameraPermission) == PackageManager.PERMISSION_GRANTED
+        val uiAutomation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        if (hadCameraPermission) uiAutomation.revokeRuntimePermission(context.packageName, cameraPermission)
+
+        try {
+            compose.setContent {
+                DeviceConfigurationOverride(DeviceConfigurationOverride.Companion.FontScale(2f)) {
+                    CameraCaptureScreen(recipe = recipe, onPhotoSaved = { _, _ -> })
+                }
+            }
+
+            val timer = context.getString(R.string.camera_timer_three)
+            compose.onNodeWithTag("camera-options")
+                .performScrollToNode(hasText(timer))
+            compose.onNodeWithText(timer)
+                .assertHasClickAction()
+                .assertHeightIsAtLeast(48.dp)
+                .performClick()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
+            val gridLabel = context.getString(R.string.camera_grid)
+            compose.onNodeWithTag("camera-options")
+                .performScrollToNode(hasText(gridLabel))
+            compose.onNodeWithText(gridLabel)
+                .assertHasClickAction()
+                .assertHeightIsAtLeast(48.dp)
+                .performClick()
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
+            compose.onNodeWithContentDescription(context.getString(R.string.camera_take_photo))
+                .assertHeightIsAtLeast(48.dp)
+        } finally {
+            if (hadCameraPermission) uiAutomation.grantRuntimePermission(context.packageName, cameraPermission)
+        }
+    }
+
+    @Test
     fun settingsExposeDefaultsAndEmitPreferenceChanges() {
         val instantDevelopment = AtomicReference<Boolean?>()
         val geotagging = AtomicReference<Boolean?>()
@@ -234,12 +285,14 @@ class ComposeFlowTest {
 
         val searchLabel = context.getString(R.string.album_search)
         compose.onNodeWithText(searchLabel).performTextInput("2024")
+        compose.onNodeWithTag("album-photo-list").performScrollToNode(hasText(first.title))
         compose.onNodeWithText(first.title, useUnmergedTree = true).assertExists()
         compose.onNodeWithText(second.title, useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText(searchLabel).performTextClearance()
         compose.onNodeWithText(context.getString(R.string.album_filter_favorites))
             .assertHeightIsAtLeast(48.dp)
             .performClick()
+        compose.onNodeWithTag("album-photo-list").performScrollToNode(hasText(first.title))
         compose.onNodeWithText(first.title, useUnmergedTree = true).assertExists()
         compose.onNodeWithText(second.title, useUnmergedTree = true).assertDoesNotExist()
 
@@ -253,6 +306,8 @@ class ComposeFlowTest {
                 SemanticsMatcher.expectValue(SemanticsProperties.Selected, true),
             )
         compose.onNodeWithText("body-01", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("album-photo-list")
+            .performScrollToNode(hasText("body-02"))
         compose.onNodeWithText("body-02", useUnmergedTree = true).assertExists()
 
         repository.remove(first.id)

@@ -32,7 +32,9 @@ class MainActivityAccessibilityTest {
             compose.activity.getString(R.string.onboarding_skip),
         ).fetchSemanticsNodes()
         if (skipOnboarding.isNotEmpty()) {
-            compose.onNodeWithText(compose.activity.getString(R.string.onboarding_skip)).performClick()
+            compose.onNodeWithText(compose.activity.getString(R.string.onboarding_skip))
+                .performScrollTo()
+                .performClick()
         }
         compose.onNodeWithText(compose.activity.getString(R.string.open_settings))
             .performScrollTo()
@@ -46,7 +48,9 @@ class MainActivityAccessibilityTest {
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
 
-        compose.onNodeWithText(compose.activity.getString(R.string.onboarding_skip)).performClick()
+        compose.onNodeWithText(compose.activity.getString(R.string.onboarding_skip))
+            .performScrollTo()
+            .performClick()
         val shutter = compose.onNodeWithContentDescription(compose.activity.getString(R.string.camera_take_photo))
         shutter.assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)

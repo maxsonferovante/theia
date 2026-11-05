@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -192,7 +193,10 @@ fun AlbumLabScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyColumn(
+                    modifier = Modifier.testTag("album-photo-list"),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     if (rollService != null) {
                         item(key = "roll-panel") {
                             AlbumRollPanel(
