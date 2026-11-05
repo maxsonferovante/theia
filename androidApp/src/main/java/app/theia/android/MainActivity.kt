@@ -308,7 +308,11 @@ private fun TheiaAppScreen() {
                                 filmStockId = selectedRecipe.filmStockId.value,
                                 mediaKind = AlbumMediaKind.VIDEO,
                                 durationMillis = result.durationMillis,
-                                notes = "recipe=${selectedRecipe.id.value};fps=${result.framesPerSecond};audio=${result.includesAudio}",
+                                notes = buildList {
+                                    add("recipe=${selectedRecipe.id.value}")
+                                    result.framesPerSecond?.let { add("fps=$it") }
+                                    add("audio=${result.includesAudio}")
+                                }.joinToString(";"),
                             ),
                         )
                     },

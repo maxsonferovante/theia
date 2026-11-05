@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -82,7 +83,7 @@ fun GeotagLabPanel(
                 }
             },
             enabled = selectedPhoto != null && preferences.geotaggingEnabled,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) { Text(stringResource(R.string.geotag_add_to_selected)) }
 
         if (message != null) {
@@ -121,7 +122,7 @@ fun GeotagLabPanel(
                                 .onFailure { message = "failed" }
                             refresh()
                         }
-                    }) { Text(stringResource(R.string.geotag_remove)) }
+                    }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.geotag_remove)) }
                 }
             }
         }

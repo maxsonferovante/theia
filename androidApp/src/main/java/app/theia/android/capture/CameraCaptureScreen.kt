@@ -458,7 +458,9 @@ fun CameraCaptureScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(cameraError ?: visualEffectError.orEmpty(), color = CameraIvory, textAlign = TextAlign.Center)
-                        TextButton(onClick = { retryCamera++ }) { Text(stringResource(R.string.camera_retry)) }
+                        TextButton(onClick = { retryCamera++ }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.camera_retry))
+                        }
                     }
                 } else if (cameraSession == null) {
                     Text(waitingStatus, color = CameraIvory, modifier = Modifier.align(Alignment.Center))
@@ -531,7 +533,7 @@ fun CameraCaptureScreen(
                                 },
                                 valueRange = cameraZoomState.minZoomRatio..cameraZoomState.maxZoomRatio,
                                 enabled = !captureInProgress,
-                                modifier = Modifier.weight(1f).semantics {
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
                                     contentDescription = zoomLabel
                                     stateDescription = zoomStateDescription
                                 },
@@ -553,7 +555,7 @@ fun CameraCaptureScreen(
                                 valueRange = exposureRange.lower.toFloat()..exposureRange.upper.toFloat(),
                                 steps = (exposureRange.upper - exposureRange.lower - 1).coerceAtLeast(0),
                                 enabled = !captureInProgress,
-                                modifier = Modifier.weight(1f).semantics {
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics {
                                     contentDescription = exposureLabel
                                     stateDescription = exposureStateDescription
                                 },
@@ -568,11 +570,15 @@ fun CameraCaptureScreen(
                     }
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { focusAt((previewView?.width ?: 0) / 2f, (previewView?.height ?: 0) / 2f) }, enabled = cameraSession != null) {
+                        TextButton(
+                            onClick = { focusAt((previewView?.width ?: 0) / 2f, (previewView?.height ?: 0) / 2f) },
+                            enabled = cameraSession != null,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) {
                             Text(stringResource(R.string.camera_focus_center))
                         }
                         if (latestPhoto != null && latestPhotoVisible) {
-                            TextButton(onClick = { context.openLatestPhoto(latestPhoto!!) }) {
+                            TextButton(onClick = { context.openLatestPhoto(latestPhoto!!) }, modifier = Modifier.heightIn(min = 48.dp)) {
                                 Text(stringResource(R.string.camera_view_latest))
                             }
                         }
@@ -585,7 +591,7 @@ fun CameraCaptureScreen(
                             modifier = Modifier.semantics {
                                 contentDescription = switchCameraDescription
                                 stateDescription = switchStateDescription
-                            },
+                            }.heightIn(min = 48.dp),
                         ) { Text(switchCameraDescription) }
                     }
 
@@ -639,10 +645,12 @@ private fun PermissionPanel(
                 textAlign = TextAlign.Center,
             )
         }
-        Button(onClick = onRequest) {
+        Button(onClick = onRequest, modifier = Modifier.heightIn(min = 48.dp)) {
             Text(stringResource(R.string.camera_request_permission))
         }
-        if (wasDenied) TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.camera_open_settings)) }
+        if (wasDenied) TextButton(onClick = onOpenSettings, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.camera_open_settings))
+        }
     }
 }
 

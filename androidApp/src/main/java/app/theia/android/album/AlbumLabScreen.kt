@@ -152,7 +152,9 @@ fun AlbumLabScreen(
         Surface(modifier.fillMaxSize(), color = AlbumNavy, contentColor = AlbumIvory) {
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 18.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    if (onBack != null) TextButton(onClick = onBack) { Text(stringResource(R.string.album_back)) }
+                    if (onBack != null) TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.album_back))
+                    }
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.album_lab_title), color = AlbumIvory, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                         Text(stringResource(R.string.album_count, visible.size), color = AlbumStone, fontSize = 13.sp)
@@ -329,7 +331,7 @@ private fun AlbumPhotoRow(photo: AlbumPhoto, onOpen: () -> Unit, onView: () -> U
         val favoriteState = stringResource(if (photo.isFavorite) R.string.album_is_favorite else R.string.album_is_not_favorite)
         IconButton(
             onClick = onFavorite,
-            modifier = Modifier.semantics {
+            modifier = Modifier.heightIn(min = 48.dp).semantics {
                 contentDescription = favoriteLabel
                 stateDescription = favoriteState
             },
@@ -374,11 +376,17 @@ private fun FullScreenMediaViewer(photo: AlbumPhoto, onClose: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (photo.mediaKind == AlbumMediaKind.PHOTO) {
-                        TextButton(onClick = { resetRequest++ }, modifier = Modifier.semantics { contentDescription = resetZoomDescription }) {
+                        TextButton(
+                            onClick = { resetRequest++ },
+                            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = resetZoomDescription },
+                        ) {
                             Text(stringResource(R.string.album_viewer_reset_zoom), color = AlbumIvory)
                         }
                     }
-                    TextButton(onClick = onClose, modifier = Modifier.semantics { contentDescription = closeDescription }) {
+                    TextButton(
+                        onClick = onClose,
+                        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = closeDescription },
+                    ) {
                         Text(stringResource(R.string.album_close), color = AlbumIvory)
                     }
                 }
@@ -443,6 +451,10 @@ private fun PhotoDetailDialog(
 ) {
     var title by remember(photo.id) { mutableStateOf(photo.title) }
     var notes by remember(photo.id) { mutableStateOf(photo.notes) }
+    val thumbnailDescription = stringResource(
+        if (photo.mediaKind == AlbumMediaKind.VIDEO) R.string.album_video_thumbnail_description
+        else R.string.album_image_description,
+    )
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.album_detail_title), modifier = Modifier.semantics { heading() }) },
@@ -454,8 +466,14 @@ private fun PhotoDetailDialog(
                 AlbumImage(
                     uri = photo.developedUri ?: photo.originalUri,
                     isVideo = photo.mediaKind == AlbumMediaKind.VIDEO,
-                    description = stringResource(if (photo.mediaKind == AlbumMediaKind.VIDEO) R.string.album_video_thumbnail_description else R.string.album_image_description),
-                    modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f).clickable(role = Role.Button, onClick = onViewMedia),
+                    description = thumbnailDescription,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(4f / 3f)
+                        .clickable(role = Role.Button, onClick = onViewMedia)
+                        .semantics {
+                            contentDescription = thumbnailDescription
+                        },
                 )
                 Text(dateLabel(photo.capturedAtEpochMillis), color = AlbumStone)
                 if (photo.durationMillis != null) Text(stringResource(R.string.album_video_duration, formatDuration(photo.durationMillis)), color = AlbumStone)
@@ -475,15 +493,19 @@ private fun PhotoDetailDialog(
         },
         confirmButton = {
             Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onToggleFavorite) { Text(if (photo.isFavorite) stringResource(R.string.album_unfavorite) else stringResource(R.string.album_favorite)) }
-                TextButton(onClick = onShare) { Text(stringResource(R.string.album_share)) }
-                Button(onClick = { onSaveMetadata(title, notes); onDismiss() }) { Text(stringResource(R.string.album_save)) }
+                TextButton(onClick = onToggleFavorite, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(if (photo.isFavorite) stringResource(R.string.album_unfavorite) else stringResource(R.string.album_favorite))
+                }
+                TextButton(onClick = onShare, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.album_share)) }
+                Button(onClick = { onSaveMetadata(title, notes); onDismiss() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.album_save))
+                }
             }
         },
         dismissButton = {
             Column {
-                TextButton(onClick = onDelete) { Text(stringResource(R.string.album_delete)) }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.album_close)) }
+                TextButton(onClick = onDelete, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.album_delete)) }
+                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.album_close)) }
             }
         },
     )

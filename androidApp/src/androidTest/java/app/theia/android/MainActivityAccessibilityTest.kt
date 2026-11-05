@@ -13,7 +13,6 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.dp
-import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -26,9 +25,6 @@ class MainActivityAccessibilityTest {
 
     @Test
     fun firstLaunchNavigationKeepsVideoHeadingAndAudioToggleAccessible() {
-        InstrumentationRegistry.getInstrumentation().uiAutomation
-            .executeShellCommand("pm revoke app.theia android.permission.CAMERA")
-            .close()
         compose.activity.getSharedPreferences("theia_user_preferences", Context.MODE_PRIVATE)
             .edit().clear().commit()
         compose.activityRule.scenario.recreate()
@@ -42,6 +38,7 @@ class MainActivityAccessibilityTest {
             .assertExists()
         compose.onNodeWithText(compose.activity.getString(R.string.camera_request_permission))
             .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
 
         compose.onNodeWithText(compose.activity.getString(R.string.open_album))
             .assertHeightIsAtLeast(48.dp)
@@ -54,7 +51,9 @@ class MainActivityAccessibilityTest {
         compose.onNodeWithText(compose.activity.getString(R.string.album_roll_start))
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
-        compose.onNodeWithText(compose.activity.getString(R.string.album_back)).performClick()
+        compose.onNodeWithText(compose.activity.getString(R.string.album_back))
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
 
         compose.onNodeWithText(compose.activity.getString(R.string.open_video))
             .assertHasClickAction()

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.MediaExtractor
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -94,12 +95,16 @@ import java.util.Locale
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import kotlin.coroutines.resumeWithException
+import kotlin.math.roundToInt
 
 private val VideoNavy = Color(0xFF182344)
 private val VideoViolet = Color(0xFF2D2D57)
 private val VideoGold = Color(0xFFEAAE35)
 private val VideoIvory = Color(0xFFE7D7B7)
 private const val MAX_RECORDING_DURATION_MILLIS = 60_000L
+private val videoMetadataExecutor = Executors.newSingleThreadExecutor { task ->
+    Thread(task, "theia-video-metadata").apply { isDaemon = true }
+}
 
 /** Video capture view with 1080p/30 preferred and lower-quality device fallback. */
 @Composable
@@ -277,9 +282,6 @@ fun VideoCaptureScreen(
         }
     }
 
-    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
-    DisposableEffect(cameraExecutor) { onDispose { cameraExecutor.shutdown() } }
-
     MaterialTheme {
         Surface(modifier.fillMaxSize(), color = VideoNavy, contentColor = VideoIvory) {
             Box(Modifier.fillMaxSize()) {
@@ -333,7 +335,7 @@ fun VideoCaptureScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(cameraError ?: visualEffectError.orEmpty(), color = VideoIvory, textAlign = TextAlign.Center)
-                        TextButton(onClick = { retryCamera++ }, enabled = activeRecording == null) {
+                        TextButton(onClick = { retryCamera++ }, enabled = activeRecording == null, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(stringResource(R.string.video_retry_camera))
                         }
                     }
@@ -439,12 +441,14 @@ fun VideoCaptureScreen(
                     }
                     if (audioDenied) {
                         Text(stringResource(R.string.video_microphone_denied), color = VideoIvory, textAlign = TextAlign.Center)
-                        TextButton(onClick = { context.openApplicationSettings() }) {
+                        TextButton(onClick = { context.openApplicationSettings() }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(stringResource(R.string.video_open_settings))
                         }
                     }
                     if (onBack != null && activeRecording == null) {
-                        TextButton(onClick = onBack) { Text(stringResource(R.string.video_back)) }
+                        TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(stringResource(R.string.video_back))
+                        }
                     }
                     Button(
                         enabled = session != null && cameraError == null && visualEffectError == null,
@@ -478,7 +482,7 @@ fun VideoCaptureScreen(
                                 )
                             }
                         },
-                        modifier = Modifier.semantics {
+                        modifier = Modifier.heightIn(min = 48.dp).semantics {
                             if (activeRecording != null) stateDescription = recordingStatus
                         },
                         shape = RoundedCornerShape(18.dp),
@@ -497,7 +501,8 @@ data class VideoCaptureResult(
     val durationMillis: Long,
     val widthPixels: Int,
     val heightPixels: Int,
-    val framesPerSecond: Int,
+    /** Average encoded frame rate measured from the saved file, or null if it could not be read. */
+    val framesPerSecond: Int?,
     val includesAudio: Boolean,
     val videoStyleId: String,
 )
@@ -529,8 +534,44 @@ private fun PermissionCard(
     ) {
         Text(body, color = VideoIvory, textAlign = TextAlign.Center)
         if (denied) Text(stringResource(R.string.video_permission_denied), color = VideoIvory, textAlign = TextAlign.Center)
-        Button(onClick = onGrant) { Text(stringResource(R.string.video_allow_camera)) }
-        if (denied) TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.video_open_settings)) }
+        Button(onClick = onGrant, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.video_allow_camera))
+        }
+        if (denied) TextButton(onClick = onOpenSettings, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.video_open_settings))
+        }
+    }
+}
+
+private fun measureEncodedFrameRate(context: Context, uri: Uri): Int? {
+    val extractor = MediaExtractor()
+    return try {
+        extractor.setDataSource(context, uri, null)
+        val videoTrack = (0 until extractor.trackCount).firstOrNull { index ->
+            extractor.getTrackFormat(index).getString(android.media.MediaFormat.KEY_MIME)?.startsWith("video/") == true
+        } ?: return null
+        extractor.selectTrack(videoTrack)
+        var firstFrameTimeUs = -1L
+        var lastFrameTimeUs = -1L
+        var frameCount = 0L
+        while (extractor.sampleTrackIndex >= 0) {
+            val sampleTimeUs = extractor.sampleTime
+            if (sampleTimeUs >= 0) {
+                if (firstFrameTimeUs < 0) firstFrameTimeUs = sampleTimeUs
+                lastFrameTimeUs = sampleTimeUs
+                frameCount += 1
+            }
+            if (!extractor.advance()) break
+        }
+        val sampleSpanUs = lastFrameTimeUs - firstFrameTimeUs
+        if (frameCount < 2 || sampleSpanUs <= 0) return null
+        (((frameCount - 1) * 1_000_000.0) / sampleSpanUs)
+            .roundToInt()
+            .takeIf { it in 1..240 }
+    } catch (_: Exception) {
+        null
+    } finally {
+        extractor.release()
     }
 }
 
@@ -616,26 +657,39 @@ private fun startVideoRecording(
                         event.error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED
                     if (hasUsableOutput && uri != Uri.EMPTY) {
                         try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                check(context.contentResolver.update(uri, ContentValues().apply {
-                                    put(MediaStore.MediaColumns.IS_PENDING, 0)
-                                }, null, null) > 0) {
-                                    context.getString(R.string.video_storage_failed)
+                            val size = capture.resolutionInfo?.resolution
+                            val video = VideoCaptureResult(
+                                uri = uri,
+                                capturedAtEpochMillis = capturedAt,
+                                durationMillis = duration,
+                                widthPixels = size?.width ?: 1920,
+                                heightPixels = size?.height ?: 1080,
+                                framesPerSecond = null,
+                                includesAudio = withAudio,
+                                videoStyleId = videoStyleId,
+                            )
+                            videoMetadataExecutor.execute {
+                                val measuredFrameRate = measureEncodedFrameRate(context, uri)
+                                try {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        check(context.contentResolver.update(uri, ContentValues().apply {
+                                            put(MediaStore.MediaColumns.IS_PENDING, 0)
+                                        }, null, null) > 0) {
+                                            context.getString(R.string.video_storage_failed)
+                                        }
+                                    }
+                                    ContextCompat.getMainExecutor(context).execute {
+                                        onResult(VideoCaptureOutcome.Saved(video.copy(framesPerSecond = measuredFrameRate)))
+                                    }
+                                } catch (failure: Exception) {
+                                    runCatching { context.contentResolver.delete(uri, null, null) }
+                                    ContextCompat.getMainExecutor(context).execute {
+                                        onResult(VideoCaptureOutcome.Failed(
+                                            failure.localizedMessage ?: context.getString(R.string.video_storage_failed),
+                                        ))
+                                    }
                                 }
                             }
-                            val size = capture.resolutionInfo?.resolution
-                            onResult(VideoCaptureOutcome.Saved(
-                                VideoCaptureResult(
-                                    uri = uri,
-                                    capturedAtEpochMillis = capturedAt,
-                                    durationMillis = duration,
-                                    widthPixels = size?.width ?: 1920,
-                                    heightPixels = size?.height ?: 1080,
-                                    framesPerSecond = capture.targetFrameRate.upper,
-                                    includesAudio = withAudio,
-                                    videoStyleId = videoStyleId,
-                                ),
-                            ))
                         } catch (failure: Exception) {
                             runCatching { context.contentResolver.delete(uri, null, null) }
                             onResult(VideoCaptureOutcome.Failed(
