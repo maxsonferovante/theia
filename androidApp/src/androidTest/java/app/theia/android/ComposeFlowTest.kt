@@ -3,7 +3,6 @@ package app.theia.android
 import android.net.Uri
 import android.content.Context
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
@@ -11,7 +10,6 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -92,11 +90,13 @@ class ComposeFlowTest {
         val films = BuiltInEquipmentCatalog.filmStocks()
         val selected = AtomicReference<CaptureRecipe?>()
         compose.setContent {
-            WorkbenchScreen(
-                catalog = BuiltInEquipmentCatalog,
-                selectedRecipe = null,
-                onRecipeSelected = selected::set,
-            )
+            DeviceConfigurationOverride(DeviceConfigurationOverride.Companion.FontScale(2f)) {
+                WorkbenchScreen(
+                    catalog = BuiltInEquipmentCatalog,
+                    selectedRecipe = null,
+                    onRecipeSelected = selected::set,
+                )
+            }
         }
 
         val nextBodyLabel = context.getString(
@@ -105,8 +105,19 @@ class ComposeFlowTest {
         )
         compose.onNodeWithContentDescription(nextBodyLabel)
             .assertHeightIsAtLeast(48.dp)
+            .performScrollTo()
+            .assertIsDisplayed()
             .performClick()
         compose.onNodeWithContentDescription(context.getString(R.string.workbench_use_selected_setup))
+            .assert(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.StateDescription,
+                    context.getString(R.string.workbench_state_not_selected),
+                ),
+            )
+            .assertHeightIsAtLeast(48.dp)
+            .performScrollTo()
+            .assertIsDisplayed()
             .performClick()
 
         assertEquals(
@@ -153,7 +164,11 @@ class ComposeFlowTest {
         repository.upsert(first)
         repository.upsert(second)
 
-        compose.setContent { AlbumLabScreen(repository = repository) }
+        compose.setContent {
+            DeviceConfigurationOverride(DeviceConfigurationOverride.Companion.FontScale(2f)) {
+                AlbumLabScreen(repository = repository)
+            }
+        }
 
         val searchLabel = context.getString(R.string.album_search)
         compose.onNodeWithText(searchLabel).performTextInput("2024")
@@ -169,9 +184,14 @@ class ComposeFlowTest {
         compose.onNodeWithText(context.getString(R.string.album_filter_all)).performClick()
         compose.onNodeWithText(context.getString(R.string.album_group_body))
             .assertHeightIsAtLeast(48.dp)
+            .performScrollTo()
+            .assertIsDisplayed()
             .performClick()
-        compose.onAllNodesWithText("body-01", useUnmergedTree = true).assertCountEquals(1)
-        compose.onAllNodesWithText("body-02", useUnmergedTree = true).assertCountEquals(1)
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.Selected, true),
+            )
+        compose.onNodeWithText("body-01", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("body-02", useUnmergedTree = true).assertExists()
 
         repository.remove(first.id)
         repository.remove(second.id)
