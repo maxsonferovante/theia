@@ -1,5 +1,6 @@
 package app.theia.android
 
+import android.Manifest
 import android.content.Context
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
@@ -25,6 +26,10 @@ class MainActivityAccessibilityTest {
 
     @Test
     fun firstLaunchNavigationKeepsVideoHeadingAndAudioToggleAccessible() {
+        compose.activityRule.scenario.onActivity {
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                .uiAutomation.revokeRuntimePermission(it.packageName, Manifest.permission.CAMERA)
+        }
         compose.activity.getSharedPreferences("theia_user_preferences", Context.MODE_PRIVATE)
             .edit().clear().commit()
         compose.activityRule.scenario.recreate()
