@@ -473,8 +473,13 @@ fun VideoCaptureScreen(
                                         activeRecording = null
                                         when (result) {
                                             is VideoCaptureOutcome.Saved -> {
-                                                captureMessage = context.getString(R.string.video_saved)
-                                                onVideoSaved(result.video, recipe)
+                                                val albumMetadataSaved = runVideoAlbumMetadataSave {
+                                                    onVideoSaved(result.video, recipe)
+                                                }
+                                                captureMessage = context.getString(
+                                                    if (albumMetadataSaved) R.string.video_saved
+                                                    else R.string.video_saved_album_metadata_failed,
+                                                )
                                             }
                                             is VideoCaptureOutcome.Failed -> captureMessage = context.getString(R.string.video_failed, result.reason)
                                         }
@@ -506,6 +511,13 @@ data class VideoCaptureResult(
     val includesAudio: Boolean,
     val videoStyleId: String,
 )
+
+internal fun runVideoAlbumMetadataSave(save: () -> Unit): Boolean = try {
+    save()
+    true
+} catch (_: Exception) {
+    false
+}
 
 private data class VideoCameraSession(
     val provider: ProcessCameraProvider,

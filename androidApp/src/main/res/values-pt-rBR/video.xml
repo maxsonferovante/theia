@@ -22,6 +22,7 @@
     <string name="video_start">Iniciar gravação</string>
     <string name="video_stop">Parar gravação</string>
     <string name="video_saved">Vídeo salvo na sua galeria.</string>
+    <string name="video_saved_album_metadata_failed">O vídeo está salvo na sua galeria, mas o Théia não conseguiu adicioná-lo ao álbum local.</string>
     <string name="video_failed">Não foi possível salvar o vídeo: %1$s</string>
     <string name="video_capture_failed">Falha ao capturar o vídeo.</string>
     <string name="video_storage_failed">Não foi possível criar a pasta de vídeos na galeria.</string>

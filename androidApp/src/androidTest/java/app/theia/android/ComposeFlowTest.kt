@@ -26,6 +26,7 @@ import app.theia.android.album.AlbumLabScreen
 import app.theia.android.album.AlbumMetadataRepository
 import app.theia.android.album.AlbumPhoto
 import app.theia.android.album.AlbumRollPanel
+import app.theia.android.capture.runVideoAlbumMetadataSave
 import app.theia.android.roll.AndroidFilmRollRepository
 import app.theia.android.roll.AndroidFilmRollService
 import app.theia.android.settings.OnboardingScreen
@@ -53,6 +54,12 @@ class ComposeFlowTest {
 
     private val context
         get() = compose.activity
+
+    @Test
+    fun albumMetadataFailureAfterVideoSaveIsRecoverable() {
+        assertEquals(true, runVideoAlbumMetadataSave {})
+        assertEquals(false, runVideoAlbumMetadataSave { error("Album storage unavailable") })
+    }
 
     @Test
     fun onboardingCanBeSkippedAndExposesItsBrandMarkLabel() {

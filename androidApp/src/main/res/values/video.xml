@@ -22,6 +22,7 @@
     <string name="video_start">Start recording</string>
     <string name="video_stop">Stop recording</string>
     <string name="video_saved">Video saved to your photo library.</string>
+    <string name="video_saved_album_metadata_failed">Video is saved to your photo library, but Théia could not add it to the local album.</string>
     <string name="video_failed">Could not save video: %1$s</string>
     <string name="video_capture_failed">Video capture failed.</string>
     <string name="video_storage_failed">The video library folder could not be created.</string>
