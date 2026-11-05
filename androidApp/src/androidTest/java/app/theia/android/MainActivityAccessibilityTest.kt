@@ -5,8 +5,10 @@ import android.content.Context
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -26,6 +28,15 @@ class MainActivityAccessibilityTest {
 
     @Test
     fun firstLaunchNavigationKeepsVideoHeadingAndAudioToggleAccessible() {
+        val skipOnboarding = compose.onAllNodesWithText(
+            compose.activity.getString(R.string.onboarding_skip),
+        ).fetchSemanticsNodes()
+        if (skipOnboarding.isNotEmpty()) {
+            compose.onNodeWithText(compose.activity.getString(R.string.onboarding_skip)).performClick()
+        }
+        compose.onNodeWithText(compose.activity.getString(R.string.open_settings))
+            .performScrollTo()
+            .performClick()
         compose.activityRule.scenario.onActivity {
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
                 .uiAutomation.revokeRuntimePermission(it.packageName, Manifest.permission.CAMERA)
@@ -44,6 +55,19 @@ class MainActivityAccessibilityTest {
         compose.onNodeWithText(compose.activity.getString(R.string.camera_request_permission))
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
+
+        compose.activityRule.scenario.onActivity {
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                .uiAutomation.grantRuntimePermission(it.packageName, Manifest.permission.CAMERA)
+        }
+        compose.activityRule.scenario.recreate()
+        val availableShutter = compose.onNodeWithContentDescription(
+            compose.activity.getString(R.string.camera_take_photo),
+        )
+        compose.waitUntil(20_000) {
+            runCatching { availableShutter.assertIsEnabled() }.isSuccess
+        }
+        availableShutter.assertHasClickAction().assertHeightIsAtLeast(48.dp)
 
         val timerLabel = compose.activity.getString(R.string.camera_timer_three)
         compose.onNodeWithText(timerLabel)
