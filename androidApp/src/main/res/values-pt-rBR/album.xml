@@ -23,7 +23,7 @@
     <string name="album_delete">Excluir</string>
     <string name="album_close">Fechar</string>
     <string name="album_delete_title">Excluir do Théia?</string>
-    <string name="album_delete_explanation">Isso remove o registro e os metadados da mídia do Théia. Os arquivos relacionados permanecem na galeria, a menos que você selecione a opção abaixo.</string>
+    <string name="album_delete_explanation">Isso remove o registro e os metadados da mídia do Théia. Os arquivos relacionados permanecem na galeria, a menos que você selecione a opção abaixo. O Android pedirá confirmação para excluir arquivos da galeria.</string>
     <string name="album_delete_gallery_copy">Também excluir os arquivos de mídia relacionados da minha galeria</string>
     <string name="album_delete_confirm">Excluir foto</string>
     <string name="album_cancel">Cancelar</string>

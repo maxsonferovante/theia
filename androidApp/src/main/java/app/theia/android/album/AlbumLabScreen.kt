@@ -1,9 +1,15 @@
 package app.theia.android.album
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -111,12 +118,27 @@ fun AlbumLabScreen(
     var selectedPhoto by remember { mutableStateOf<AlbumPhoto?>(null) }
     var viewerPhoto by remember { mutableStateOf<AlbumPhoto?>(null) }
     var deleteCandidate by remember { mutableStateOf<AlbumPhoto?>(null) }
+    var pendingGalleryDeletionId by rememberSaveable { mutableStateOf<String?>(null) }
     var grouping by remember { mutableStateOf(AlbumGrouping.DATE) }
     var visibleRollPhotoIds by remember(rollService) {
         mutableStateOf<Set<String>?>(if (rollService == null) null else emptySet())
     }
 
     fun refresh() { photos = repository.all() }
+
+    val galleryDeleteLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        val photoId = pendingGalleryDeletionId
+        pendingGalleryDeletionId = null
+        if (result.resultCode == Activity.RESULT_OK && photoId != null) {
+            repository.remove(photoId)
+            selectedPhoto = null
+            refresh()
+        } else if (result.resultCode != Activity.RESULT_CANCELED) {
+            Toast.makeText(context, context.getString(R.string.album_delete_gallery_failed), Toast.LENGTH_LONG).show()
+        }
+    }
 
     val availablePhotos = photos.filter { photo ->
         photo.rollId == null || visibleRollPhotoIds == null || photo.id in visibleRollPhotoIds.orEmpty()
@@ -202,7 +224,12 @@ fun AlbumLabScreen(
                             AlbumRollPanel(
                                 service = rollService,
                                 selectedRecipe = selectedRecipe,
-                                onVisiblePhotoIdsChanged = { visibleRollPhotoIds = it },
+                                onVisiblePhotoIdsChanged = { ids ->
+                                    if (visibleRollPhotoIds != ids) {
+                                        visibleRollPhotoIds = ids
+                                        refresh()
+                                    }
+                                },
                                 modifier = Modifier.padding(bottom = 8.dp),
                             )
                         }
@@ -268,21 +295,32 @@ fun AlbumLabScreen(
             photo = photo,
             onDismiss = { deleteCandidate = null },
             onConfirm = { deleteDevelopedCopy ->
-                var copyDeleted = true
-                if (deleteDevelopedCopy) {
-                    copyDeleted = listOfNotNull(photo.originalUri, photo.developedUri)
-                        .distinct()
-                        .all { location ->
-                            runCatching { context.contentResolver.delete(Uri.parse(location), null, null) >= 0 }
-                                .getOrDefault(false)
-                        }
-                }
-                if (copyDeleted) {
+                val galleryUris = listOfNotNull(photo.originalUri, photo.developedUri)
+                    .distinct()
+                    .map(Uri::parse)
+                if (!deleteDevelopedCopy) {
                     repository.remove(photo.id)
                     selectedPhoto = null
                     refresh()
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && galleryUris.isNotEmpty()) {
+                    runCatching {
+                        val request = MediaStore.createDeleteRequest(context.contentResolver, galleryUris)
+                        pendingGalleryDeletionId = photo.id
+                        galleryDeleteLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+                    }.onFailure {
+                        Toast.makeText(context, context.getString(R.string.album_delete_gallery_failed), Toast.LENGTH_LONG).show()
+                    }
                 } else {
-                    Toast.makeText(context, context.getString(R.string.album_delete_gallery_failed), Toast.LENGTH_LONG).show()
+                    val copyDeleted = galleryUris.all { uri ->
+                        runCatching { context.contentResolver.delete(uri, null, null) > 0 }.getOrDefault(false)
+                    }
+                    if (copyDeleted) {
+                        repository.remove(photo.id)
+                        selectedPhoto = null
+                        refresh()
+                    } else {
+                        Toast.makeText(context, context.getString(R.string.album_delete_gallery_failed), Toast.LENGTH_LONG).show()
+                    }
                 }
                 deleteCandidate = null
             },
@@ -570,7 +608,11 @@ private fun AlbumImage(uri: String, isVideo: Boolean, description: String, modif
 
 private fun decodeAlbumPreview(context: android.content.Context, uri: Uri): android.graphics.Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+    val decodedBounds = context.contentResolver.openInputStream(uri)?.use {
+        BitmapFactory.decodeStream(it, null, bounds)
+        bounds.outWidth > 0 && bounds.outHeight > 0
+    } ?: false
+    if (!decodedBounds) return null
     var sampleSize = 1
     while (bounds.outWidth / sampleSize > 1200 || bounds.outHeight / sampleSize > 1200) sampleSize *= 2
     return context.contentResolver.openInputStream(uri)?.use { input ->
@@ -580,7 +622,11 @@ private fun decodeAlbumPreview(context: android.content.Context, uri: Uri): andr
 
 private fun decodeViewerBitmap(context: android.content.Context, uri: Uri): android.graphics.Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+    val decodedBounds = context.contentResolver.openInputStream(uri)?.use {
+        BitmapFactory.decodeStream(it, null, bounds)
+        bounds.outWidth > 0 && bounds.outHeight > 0
+    } ?: false
+    if (!decodedBounds) return null
     var sampleSize = 1
     while (bounds.outWidth / sampleSize > 2400 || bounds.outHeight / sampleSize > 2400) sampleSize *= 2
     return context.contentResolver.openInputStream(uri)?.use { input ->

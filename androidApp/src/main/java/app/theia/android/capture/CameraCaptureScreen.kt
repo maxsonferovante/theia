@@ -730,83 +730,73 @@ private fun saveOriginal(
 ) {
     val resolver = context.contentResolver
     val name = "Theia_${SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())}.jpg"
-    val contentValues = ContentValues().apply {
-        put(MediaStore.Images.Media.DISPLAY_NAME, name)
-        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Théia")
-            put(MediaStore.Images.Media.IS_PENDING, 1)
-        } else {
-            put(MediaStore.Images.Media.TITLE, name.removeSuffix(".jpg"))
-            val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-            val targetDirectory = java.io.File(pictures, "Théia")
-            if (!targetDirectory.exists() && !targetDirectory.mkdirs()) {
-                onComplete(Result.failure(IllegalStateException(context.getString(R.string.camera_gallery_unavailable))))
-                return
-            }
-            put(
-                MediaStore.Images.Media.DATA,
-                java.io.File(targetDirectory, name).absolutePath,
-            )
-        }
-    }
-    val outputOptions = try {
-        ImageCapture.OutputFileOptions.Builder(
-            resolver,
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            contentValues,
-        ).build()
+    val temporaryFile = try {
+        java.io.File.createTempFile("theia-original-", ".jpg", context.cacheDir)
     } catch (failure: Exception) {
         onComplete(Result.failure(failure))
         return
     }
+    val outputOptions = ImageCapture.OutputFileOptions.Builder(temporaryFile).build()
     try {
         imageCapture.takePicture(
         outputOptions,
         executor,
         object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                val savedUri = output.savedUri
-                if (savedUri == null) {
-                    onComplete(Result.failure(IllegalStateException(context.getString(R.string.camera_gallery_unavailable))))
-                    return
-                }
                 try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        val publishValues = ContentValues().apply {
-                            put(MediaStore.Images.Media.IS_PENDING, 0)
-                        }
-                        check(resolver.update(savedUri, publishValues, null, null) > 0) {
-                            context.getString(R.string.camera_gallery_unavailable)
-                        }
-                    }
+                    val savedUri = publishOriginal(context, name, temporaryFile)
                     onComplete(Result.success(savedUri))
                 } catch (failure: Exception) {
-                    runCatching { resolver.delete(savedUri, null, null) }
                     onComplete(Result.failure(failure))
+                } finally {
+                    temporaryFile.delete()
                 }
             }
 
             override fun onError(exception: ImageCaptureException) {
-                val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    "${MediaStore.Images.Media.DISPLAY_NAME}=? AND ${MediaStore.Images.Media.IS_PENDING}=1"
-                } else {
-                    "${MediaStore.Images.Media.DISPLAY_NAME}=?"
-                }
-                resolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, arrayOf(name))
+                temporaryFile.delete()
                 onComplete(Result.failure(exception))
             }
         },
         )
     } catch (failure: Exception) {
-        val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            "${MediaStore.Images.Media.DISPLAY_NAME}=? AND ${MediaStore.Images.Media.IS_PENDING}=1"
-        } else {
-            "${MediaStore.Images.Media.DISPLAY_NAME}=?"
-        }
-        runCatching {
-            resolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, arrayOf(name))
-        }
+        temporaryFile.delete()
         onComplete(Result.failure(failure))
+    }
+}
+
+private fun publishOriginal(context: Context, displayName: String, temporaryFile: java.io.File): Uri {
+    val resolver = context.contentResolver
+    val contentValues = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Théia")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        } else {
+            put(MediaStore.Images.Media.TITLE, displayName.removeSuffix(".jpg"))
+            val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+            val targetDirectory = java.io.File(pictures, "Théia")
+            check(targetDirectory.exists() || targetDirectory.mkdirs()) {
+                context.getString(R.string.camera_gallery_unavailable)
+            }
+            put(MediaStore.Images.Media.DATA, java.io.File(targetDirectory, displayName).absolutePath)
+        }
+    }
+    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        ?: error(context.getString(R.string.camera_gallery_unavailable))
+    try {
+        resolver.openOutputStream(uri, "w")?.use { output ->
+            temporaryFile.inputStream().use { input -> input.copyTo(output) }
+        } ?: error(context.getString(R.string.camera_gallery_unavailable))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            check(resolver.update(uri, ContentValues().apply {
+                put(MediaStore.Images.Media.IS_PENDING, 0)
+            }, null, null) > 0) { context.getString(R.string.camera_gallery_unavailable) }
+        }
+        return uri
+    } catch (failure: Exception) {
+        runCatching { resolver.delete(uri, null, null) }
+        throw failure
     }
 }

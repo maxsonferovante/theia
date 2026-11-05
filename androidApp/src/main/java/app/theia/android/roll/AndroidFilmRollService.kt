@@ -164,8 +164,11 @@ private class ContentResolverOriginalPhotoSource(context: Context) : OriginalPho
     override suspend fun loadOriginal(location: GalleryLocation): CapturedPhoto = withContext(Dispatchers.IO) {
         val uri = Uri.parse(location.value)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        appContext.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: error("Could not open original photo")
+        val decodedBounds = appContext.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, bounds)
+            bounds.outWidth > 0 && bounds.outHeight > 0
+        } ?: false
+        check(decodedBounds) { "Could not read original photo dimensions" }
         CapturedPhoto(
             handle = uri.toString(),
             capturedAtEpochMillis = System.currentTimeMillis(),
@@ -185,8 +188,11 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
         }
         val sourceUri = Uri.parse(photo.handle)
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        appContext.contentResolver.openInputStream(sourceUri)?.use { BitmapFactory.decodeStream(it, null, options) }
-            ?: error("Could not read the original photo")
+        val decodedBounds = appContext.contentResolver.openInputStream(sourceUri)?.use {
+            BitmapFactory.decodeStream(it, null, options)
+            options.outWidth > 0 && options.outHeight > 0
+        } ?: false
+        check(decodedBounds) { "Could not read the original photo dimensions" }
         var sampleSize = 1
         while (maxOf(options.outWidth / sampleSize, options.outHeight / sampleSize) > MAX_DEVELOPED_EDGE) sampleSize *= 2
         val source = appContext.contentResolver.openInputStream(sourceUri)?.use { input ->

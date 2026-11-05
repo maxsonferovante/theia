@@ -23,7 +23,7 @@
     <string name="album_delete">Delete</string>
     <string name="album_close">Close</string>
     <string name="album_delete_title">Delete from Théia?</string>
-    <string name="album_delete_explanation">This removes the media record and metadata from Théia. Related files remain in your photo library unless you select the option below.</string>
+    <string name="album_delete_explanation">This removes the media record and metadata from Théia. Related files remain in your photo library unless you select the option below. Android will ask you to confirm deleting gallery files.</string>
     <string name="album_delete_gallery_copy">Also delete related media files from my photo library</string>
     <string name="album_delete_confirm">Delete photo</string>
     <string name="album_cancel">Cancel</string>
