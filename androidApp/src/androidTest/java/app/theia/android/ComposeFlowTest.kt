@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -16,9 +17,10 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.DeviceConfigurationOverride
 import androidx.compose.ui.test.FontScale
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.activity.ComponentActivity
 import app.theia.android.album.AlbumLabScreen
 import app.theia.android.album.AlbumMetadataRepository
 import app.theia.android.album.AlbumPhoto
@@ -41,7 +43,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ComposeFlowTest {
     @get:Rule
-    val compose = createAndroidComposeRule<ComponentActivity>()
+    val compose = createAndroidComposeRule<MainActivity>()
 
     private val context
         get() = compose.activity
@@ -73,6 +75,27 @@ class ComposeFlowTest {
             .assertHeightIsAtLeast(48.dp)
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun firstLaunchNavigationKeepsVideoHeadingAndAudioToggleAccessible() {
+        compose.activity.getSharedPreferences("theia_user_preferences", android.content.Context.MODE_PRIVATE)
+            .edit().clear().commit()
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+
+        compose.onNodeWithText(context.getString(R.string.onboarding_skip)).performClick()
+        compose.onNodeWithText(context.getString(R.string.open_video))
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
+            .performScrollTo()
+            .performClick()
+
+        compose.onNodeWithText(context.getString(R.string.video_capture_title))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Heading, Unit))
+        compose.onNodeWithContentDescription(context.getString(R.string.video_include_audio))
+            .assertHasClickAction()
+            .assertIsOff()
     }
 
     @Test
