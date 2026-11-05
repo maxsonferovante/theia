@@ -1,7 +1,13 @@
 package app.theia.android.album
 
 import android.animation.ValueAnimator
+import android.content.Context
+import android.database.ContentObserver
+import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,9 +83,7 @@ fun AlbumRollPanel(
     var revealRollId by remember { mutableStateOf<FilmRollId?>(null) }
     var knownDevelopedRollIds by remember { mutableStateOf<Set<FilmRollId>?>(null) }
     val context = LocalContext.current
-    val systemAnimationsEnabled = remember(context) {
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
-    }
+    val systemAnimationsEnabled = rememberSystemAnimationsEnabled(context)
     val scope = rememberCoroutineScope()
 
     suspend fun refresh() {
@@ -199,6 +204,42 @@ fun AlbumRollPanel(
         )
     }
 }
+
+@Composable
+internal fun rememberSystemAnimationsEnabled(context: Context): Boolean {
+    val animationsEnabled = remember(context) { mutableStateOf(readSystemAnimationsEnabled(context)) }
+    DisposableEffect(context) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                animationsEnabled.value = readSystemAnimationsEnabled(context)
+            }
+        }
+        val uri = Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE)
+        context.contentResolver.registerContentObserver(uri, false, observer)
+        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+    }
+    return animationsEnabled.value
+}
+
+private fun readSystemAnimationsEnabled(context: Context): Boolean {
+    val animatorDurationScale = Settings.Global.getFloat(
+        context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f,
+    )
+    val valueAnimatorEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+    return systemAnimationsEnabledForPlatform(
+        sdkInt = Build.VERSION.SDK_INT,
+        animatorDurationScale = animatorDurationScale,
+        valueAnimatorEnabled = valueAnimatorEnabled,
+    )
+}
+
+internal fun systemAnimationsEnabledForPlatform(
+    sdkInt: Int,
+    animatorDurationScale: Float,
+    valueAnimatorEnabled: Boolean,
+): Boolean = if (sdkInt >= Build.VERSION_CODES.O) valueAnimatorEnabled else animatorDurationScale > 0f
 
 @Composable
 private fun RollCard(

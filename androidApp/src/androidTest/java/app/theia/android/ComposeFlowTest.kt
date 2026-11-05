@@ -2,7 +2,11 @@ package app.theia.android
 
 import android.net.Uri
 import android.content.Context
+import android.os.Build
+import android.os.ParcelFileDescriptor
+import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
@@ -22,10 +26,13 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import app.theia.android.album.AlbumLabScreen
 import app.theia.android.album.AlbumMetadataRepository
 import app.theia.android.album.AlbumPhoto
 import app.theia.android.album.AlbumRollPanel
+import app.theia.android.album.rememberSystemAnimationsEnabled
+import app.theia.android.album.systemAnimationsEnabledForPlatform
 import app.theia.android.capture.runVideoAlbumMetadataSave
 import app.theia.android.roll.AndroidFilmRollRepository
 import app.theia.android.roll.AndroidFilmRollService
@@ -59,6 +66,54 @@ class ComposeFlowTest {
     fun albumMetadataFailureAfterVideoSaveIsRecoverable() {
         assertEquals(true, runVideoAlbumMetadataSave {})
         assertEquals(false, runVideoAlbumMetadataSave { error("Album storage unavailable") })
+    }
+
+    @Test
+    fun reducedMotionPreferenceUpdatesWhenSystemAnimatorScaleChanges() {
+        assertEquals(
+            false,
+            systemAnimationsEnabledForPlatform(Build.VERSION_CODES.N, animatorDurationScale = 0f, valueAnimatorEnabled = true),
+        )
+        assertEquals(
+            true,
+            systemAnimationsEnabledForPlatform(Build.VERSION_CODES.N_MR1, animatorDurationScale = 1f, valueAnimatorEnabled = false),
+        )
+        assertEquals(
+            false,
+            systemAnimationsEnabledForPlatform(Build.VERSION_CODES.O, animatorDurationScale = 1f, valueAnimatorEnabled = false),
+        )
+        val activityContext = context
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val animatorScaleSetting = Settings.Global.ANIMATOR_DURATION_SCALE
+        val originalScale = Settings.Global.getFloat(
+            activityContext.contentResolver,
+            animatorScaleSetting,
+            1f,
+        )
+        fun setAnimatorScale(scale: Float) {
+            ParcelFileDescriptor.AutoCloseInputStream(
+                instrumentation.uiAutomation.executeShellCommand(
+                    "settings put global $animatorScaleSetting $scale",
+                ),
+            ).use { it.readBytes() }
+        }
+
+        try {
+            setAnimatorScale(0f)
+            compose.setContent {
+                Text(if (rememberSystemAnimationsEnabled(activityContext)) "animations-on" else "animations-off")
+            }
+            compose.waitUntil(5_000) {
+                runCatching { compose.onNodeWithText("animations-off").assertExists() }.isSuccess
+            }
+
+            setAnimatorScale(1f)
+            compose.waitUntil(5_000) {
+                runCatching { compose.onNodeWithText("animations-on").assertExists() }.isSuccess
+            }
+        } finally {
+            setAnimatorScale(originalScale)
+        }
     }
 
     @Test
