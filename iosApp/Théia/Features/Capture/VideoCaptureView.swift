@@ -29,6 +29,27 @@ private enum VideoStyleOptions {
     ]
 }
 
+private enum VideoResolution: String, CaseIterable, Identifiable {
+    case hd1080p
+    case uhd4k
+
+    var id: String { rawValue }
+    var localizationKey: String {
+        switch self {
+        case .hd1080p: "video_resolution_1080p"
+        case .uhd4k: "video_resolution_4k"
+        }
+    }
+}
+
+private struct VideoFormatConfiguration {
+    let preferredResolution: VideoResolution
+    let dimensions: String
+    let framesPerSecond: Int
+    let resolutionFallback: Bool
+    let frameRateFallback: Bool
+}
+
 /// Native short-video capture. Video does not use or advance a film roll.
 struct VideoCaptureView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -98,6 +119,21 @@ struct VideoCaptureView: View {
             .disabled(recorder.isRecording || recorder.isSaving)
             .accessibilityLabel(NSLocalizedString("video_style_label", comment: "Choose a video visual style"))
 
+            if recorder.supports4KAt30 {
+                Picker(NSLocalizedString("video_resolution_label", comment: "Choose video resolution"), selection: Binding(
+                    get: { recorder.resolution },
+                    set: { recorder.selectResolution($0) }
+                )) {
+                    ForEach(VideoResolution.allCases) { resolution in
+                        Text(NSLocalizedString(resolution.localizationKey, comment: "Video resolution option"))
+                            .tag(resolution)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(recorder.isRecording || recorder.isSaving)
+                .accessibilityLabel(NSLocalizedString("video_resolution_label", comment: "Choose video resolution"))
+            }
+
             HStack {
                 Label(NSLocalizedString(recorder.includesAudio ? "video_audio_on" : "video_audio_off", comment: "Audio recording status"), systemImage: recorder.includesAudio ? "mic.fill" : "mic.slash")
                     .font(.subheadline.weight(.medium))
@@ -121,7 +157,7 @@ struct VideoCaptureView: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.84))
                 Text(recorder.framesPerSecond > 0
-                     ? String(format: NSLocalizedString("video_quality_format", comment: "Selected video quality"), recorder.framesPerSecond)
+                     ? String(format: NSLocalizedString("video_quality_format", comment: "Actual video output dimensions and frame rate"), recorder.outputDimensions, recorder.framesPerSecond)
                      : NSLocalizedString("video_quality_device_default", comment: "The device-selected video frame rate"))
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.84))
@@ -189,7 +225,10 @@ private final class VideoCaptureModel: ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var isSaving = false
     @Published private(set) var elapsedSeconds = 0
-    @Published private(set) var framesPerSecond = 30
+    @Published private(set) var framesPerSecond = 0
+    @Published private(set) var outputDimensions = ""
+    @Published private(set) var resolution = VideoResolution.hd1080p
+    @Published private(set) var supports4KAt30 = false
     @Published private(set) var savedRecord: NativeVideoCaptureRecord?
     @Published var showAlert = false
     @Published private(set) var alertTitle = NSLocalizedString("video_title", comment: "Video capture alert title")
@@ -205,6 +244,40 @@ private final class VideoCaptureModel: ObservableObject {
     private var pendingRecipe: NativeCaptureRecipe?
     private var pendingAudio = false
     private var pendingVideoStyleID = VideoStyleOptions.equipmentRecipeID
+
+    func selectResolution(_ requested: VideoResolution) {
+        guard !isRecording, !isSaving else { return }
+        guard requested != .uhd4k || supports4KAt30 else { return }
+        let previousResolution = resolution
+        let previousDimensions = outputDimensions
+        let previousFrameRate = framesPerSecond
+        let resources = resources
+        sessionQueue.async { [weak self] in
+            guard let device = resources.videoInput?.device else { return }
+            resources.session.beginConfiguration()
+            let result = Self.configureVideoFormat(device, requested: requested)
+            resources.session.commitConfiguration()
+            Task { @MainActor in
+                guard let result else {
+                    self?.resolution = previousResolution
+                    self?.outputDimensions = previousDimensions
+                    self?.framesPerSecond = previousFrameRate
+                    return
+                }
+                self?.resolution = result.preferredResolution
+                self?.outputDimensions = result.dimensions
+                self?.framesPerSecond = result.framesPerSecond
+                if result.resolutionFallback {
+                    self?.present(
+                        String(format: NSLocalizedString("video_resolution_fallback", comment: "Resolution fallback with actual dimensions"), result.dimensions),
+                        settings: false
+                    )
+                } else if result.frameRateFallback {
+                    self?.present(NSLocalizedString("video_frame_rate_fallback", comment: "Requested frame rate is unavailable"), settings: false)
+                }
+            }
+        }
+    }
 
     init() {
         frameProcessor.onPreviewFrame = { [weak self] image in self?.previewFrame = image }
@@ -344,8 +417,26 @@ private final class VideoCaptureModel: ObservableObject {
         let resources = resources
         let frameProcessor = frameProcessor
         let sessionQueue = sessionQueue
+        let requestedResolution = resolution
         sessionQueue.async { [weak self] in
-            guard !resources.session.isRunning else { Task { @MainActor in self?.cameraReady = true }; return }
+            if resources.session.isRunning {
+                if let device = resources.videoInput?.device {
+                    let can4K = Self.supports4KAt30(device)
+                    let result = Self.configureVideoFormat(device, requested: requestedResolution)
+                    Task { @MainActor in
+                        self?.supports4KAt30 = can4K
+                        if let result {
+                            self?.resolution = result.preferredResolution
+                            self?.outputDimensions = result.dimensions
+                            self?.framesPerSecond = result.framesPerSecond
+                        }
+                        self?.cameraReady = true
+                    }
+                } else {
+                    Task { @MainActor in self?.cameraReady = true }
+                }
+                return
+            }
             if resources.videoInput != nil {
                 resources.session.startRunning()
                 Task { @MainActor in self?.cameraReady = true }
@@ -353,7 +444,8 @@ private final class VideoCaptureModel: ObservableObject {
             }
 
             resources.session.beginConfiguration()
-            if resources.session.canSetSessionPreset(.hd1920x1080) { resources.session.sessionPreset = .hd1920x1080 }
+            if resources.session.canSetSessionPreset(.inputPriority) { resources.session.sessionPreset = .inputPriority }
+            else if resources.session.canSetSessionPreset(.hd1920x1080) { resources.session.sessionPreset = .hd1920x1080 }
             else { resources.session.sessionPreset = .high }
             resources.videoDataOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
@@ -369,7 +461,9 @@ private final class VideoCaptureModel: ObservableObject {
                 return
             }
             resources.session.addInput(input)
-            let frameRate = Self.configureFrameRate(device)
+            let can4K = Self.supports4KAt30(device)
+            let effectiveResolution: VideoResolution = requestedResolution == .uhd4k && can4K ? .uhd4k : .hd1080p
+            let formatConfiguration = Self.configureVideoFormat(device, requested: effectiveResolution)
             resources.session.addOutput(resources.movieOutput)
             resources.session.addOutput(resources.videoDataOutput)
             if let connection = resources.videoDataOutput.connection(with: .video), connection.isVideoOrientationSupported {
@@ -382,36 +476,111 @@ private final class VideoCaptureModel: ObservableObject {
             resources.session.commitConfiguration()
             resources.session.startRunning()
             Task { @MainActor in
-                self?.framesPerSecond = frameRate.framesPerSecond
-                if frameRate.usedFallback {
-                    self?.present(NSLocalizedString("video_frame_rate_fallback", comment: "Frame rate fallback information"), settings: false)
+                self?.supports4KAt30 = can4K
+                if let formatConfiguration {
+                    self?.resolution = formatConfiguration.preferredResolution
+                    self?.outputDimensions = formatConfiguration.dimensions
+                    self?.framesPerSecond = formatConfiguration.framesPerSecond
+                    if formatConfiguration.resolutionFallback {
+                        self?.present(
+                            String(format: NSLocalizedString("video_resolution_fallback", comment: "Resolution fallback with actual dimensions"), formatConfiguration.dimensions),
+                            settings: false
+                        )
+                    } else if formatConfiguration.frameRateFallback {
+                        self?.present(NSLocalizedString("video_frame_rate_fallback", comment: "Requested frame rate is unavailable"), settings: false)
+                    }
                 }
                 self?.cameraReady = true
             }
         }
     }
 
-    private nonisolated static func configureFrameRate(_ device: AVCaptureDevice) -> (framesPerSecond: Int, usedFallback: Bool) {
-        let ranges = device.activeFormat.videoSupportedFrameRateRanges
-        let supportedRates = ranges.flatMap { range -> [Int] in
-            let upperBound = min(30, Int(floor(range.maxFrameRate)))
-            let lowerBound = Int(ceil(range.minFrameRate))
-            guard lowerBound <= upperBound else { return [] }
-            return Array(lowerBound...upperBound)
+    private nonisolated static func supports4KAt30(_ device: AVCaptureDevice) -> Bool {
+        device.formats.contains { format in
+            let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            guard dimensions.width >= 3_840, dimensions.height >= 2_160 else { return false }
+            return format.videoSupportedFrameRateRanges.contains { $0.minFrameRate <= 30 && $0.maxFrameRate >= 30 }
         }
-        guard let target = supportedRates.max() else { return (0, true) }
+    }
 
-        do {
-            try device.lockForConfiguration()
-            defer { device.unlockForConfiguration() }
-            let frameDuration = CMTime(value: 1, timescale: CMTimeScale(target))
-            device.activeVideoMinFrameDuration = frameDuration
-            device.activeVideoMaxFrameDuration = frameDuration
-            return (target, target != 30)
-        } catch {
-            // Do not report a rate that the device did not accept.
-            return (0, true)
+    private nonisolated static func configureVideoFormat(
+        _ device: AVCaptureDevice,
+        requested: VideoResolution
+    ) -> VideoFormatConfiguration? {
+        struct Candidate {
+            let format: AVCaptureDevice.Format
+            let width: Int32
+            let height: Int32
+            let framesPerSecond: Int
+            var pixelCount: Int64 { Int64(width) * Int64(height) }
         }
+
+        let candidates = device.formats.compactMap { format -> Candidate? in
+            let size = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            let rates = format.videoSupportedFrameRateRanges.compactMap { range -> Int? in
+                let upperBound = min(30, Int(floor(range.maxFrameRate)))
+                let lowerBound = Int(ceil(range.minFrameRate))
+                guard lowerBound <= upperBound else { return nil }
+                return upperBound
+            }
+            guard let rate = rates.max() else { return nil }
+            return Candidate(format: format, width: size.width, height: size.height, framesPerSecond: rate)
+        }
+
+        func choose(_ resolution: VideoResolution) -> Candidate? {
+            let minimumWidth: Int32 = resolution == .uhd4k ? 3_840 : 1_920
+            let minimumHeight: Int32 = resolution == .uhd4k ? 2_160 : 1_080
+            return candidates
+                .filter { $0.width >= minimumWidth && $0.height >= minimumHeight && $0.framesPerSecond == 30 }
+                .min { $0.pixelCount < $1.pixelCount }
+        }
+
+        let lowerResolutionAt30 = candidates
+            .filter { ($0.width < 1_920 || $0.height < 1_080) && $0.framesPerSecond == 30 }
+            .max { $0.pixelCount < $1.pixelCount }
+        let fallbackCandidate = choose(.hd1080p) ?? lowerResolutionAt30
+
+        let selected: Candidate?
+        if requested == .uhd4k {
+            selected = choose(.uhd4k) ?? fallbackCandidate
+                ?? candidates.max { lhs, rhs in
+                    lhs.framesPerSecond == rhs.framesPerSecond
+                        ? lhs.pixelCount < rhs.pixelCount
+                        : lhs.framesPerSecond < rhs.framesPerSecond
+                }
+        } else {
+            selected = choose(.hd1080p)
+                ?? lowerResolutionAt30
+                ?? candidates.filter { $0.width <= 1_920 && $0.height <= 1_080 }
+                    .max { $0.framesPerSecond < $1.framesPerSecond }
+        }
+
+        func apply(_ candidate: Candidate, requested: VideoResolution) -> VideoFormatConfiguration? {
+            do {
+                try device.lockForConfiguration()
+                defer { device.unlockForConfiguration() }
+                device.activeFormat = candidate.format
+                let duration = CMTime(value: 1, timescale: CMTimeScale(candidate.framesPerSecond))
+                device.activeVideoMinFrameDuration = duration
+                device.activeVideoMaxFrameDuration = duration
+                let meetsRequestedDimensions = candidate.width >= (requested == .uhd4k ? 3_840 : 1_920)
+                    && candidate.height >= (requested == .uhd4k ? 2_160 : 1_080)
+                return VideoFormatConfiguration(
+                    preferredResolution: requested == .uhd4k && !meetsRequestedDimensions ? .hd1080p : requested,
+                    dimensions: "\(candidate.width)×\(candidate.height)",
+                    framesPerSecond: candidate.framesPerSecond,
+                    resolutionFallback: !meetsRequestedDimensions,
+                    frameRateFallback: candidate.framesPerSecond < 30
+                )
+            } catch {
+                return nil
+            }
+        }
+
+        guard let selected else { return nil }
+        if let configured = apply(selected, requested: requested) { return configured }
+        if requested == .uhd4k, let fallbackCandidate { return apply(fallbackCandidate, requested: .uhd4k) }
+        return nil
     }
 
     private func installAudioInput() async {

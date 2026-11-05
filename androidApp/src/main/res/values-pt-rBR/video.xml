@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="video_style_label">Estilo visual</string>
+    <string name="video_resolution_label">Resolução da gravação</string>
+    <string name="video_resolution_1080p">1080p</string>
+    <string name="video_resolution_4k">4K</string>
+    <string name="video_resolution_fallback">A resolução ou taxa de quadros solicitada não está disponível. Usando a qualidade compatível mais próxima.</string>
     <string name="video_style_recipe">Equipamento</string>
     <string name="video_style_cinematic_warm">Cinema quente</string>
     <string name="video_style_moonlit_monochrome">Lunar mono</string>

@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Range
 import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -237,37 +238,54 @@ fun CameraCaptureScreen(
                 return@LaunchedEffect
             }
 
-            val preview = Preview.Builder()
-                .setTargetRotation(view.display?.rotation ?: Surface.ROTATION_0)
-                .build()
-                .also { it.surfaceProvider = view.surfaceProvider }
-            val imageCapture = ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .setFlashMode(ImageCapture.FLASH_MODE_AUTO)
-                .setResolutionSelector(
-                    ResolutionSelector.Builder()
-                        .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
-                        .build(),
-                )
-                .setTargetRotation(view.display?.rotation ?: Surface.ROTATION_0)
-                .build()
-            val effect = FilmPreviewEffect(recipe, includeVideoTarget = false) { _ ->
-                ContextCompat.getMainExecutor(context).execute {
-                    visualEffectError = context.getString(R.string.camera_visual_effect_failed)
+            fun bind(prefer30Fps: Boolean): CameraSession {
+                val previewBuilder = Preview.Builder()
+                if (prefer30Fps) previewBuilder.setTargetFrameRate(Range(30, 30))
+                val preview = previewBuilder
+                    .setTargetRotation(view.display?.rotation ?: Surface.ROTATION_0)
+                    .build()
+                    .also { it.surfaceProvider = view.surfaceProvider }
+                val imageCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                    .setFlashMode(ImageCapture.FLASH_MODE_AUTO)
+                    .setResolutionSelector(
+                        ResolutionSelector.Builder()
+                            .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                            .build(),
+                    )
+                    .setTargetRotation(view.display?.rotation ?: Surface.ROTATION_0)
+                    .build()
+                val effect = FilmPreviewEffect(recipe, includeVideoTarget = false) { _ ->
+                    ContextCompat.getMainExecutor(context).execute {
+                        visualEffectError = context.getString(R.string.camera_visual_effect_failed)
+                    }
+                }
+                try {
+                    val group = androidx.camera.core.UseCaseGroup.Builder()
+                        .addUseCase(preview)
+                        .addUseCase(imageCapture)
+                        .addEffect(effect)
+                        .apply { view.viewPort?.let(::setViewPort) }
+                        .build()
+                    val camera = provider.bindToLifecycle(lifecycleOwner, selector, group)
+                    return CameraSession(provider, preview, imageCapture, camera, effect)
+                } catch (error: Exception) {
+                    runCatching { provider.unbind(preview, imageCapture) }
+                        .exceptionOrNull()
+                        ?.let(error::addSuppressed)
+                    effect.release()
+                    throw error
                 }
             }
-            val group = androidx.camera.core.UseCaseGroup.Builder()
-                .addUseCase(preview)
-                .addUseCase(imageCapture)
-                .addEffect(effect)
-                .apply { view.viewPort?.let(::setViewPort) }
-                .build()
-            try {
-                val camera = provider.bindToLifecycle(lifecycleOwner, selector, group)
-                cameraSession = CameraSession(provider, preview, imageCapture, camera, effect)
-            } catch (error: Exception) {
-                effect.release()
-                throw error
+            cameraSession = try {
+                bind(prefer30Fps = true)
+            } catch (preferredFailure: Exception) {
+                try {
+                    bind(prefer30Fps = false)
+                } catch (fallbackFailure: Exception) {
+                    fallbackFailure.addSuppressed(preferredFailure)
+                    throw fallbackFailure
+                }
             }
         } catch (error: Exception) {
             cameraError = error.localizedMessage ?: context.getString(R.string.camera_initialization_failed)

@@ -1,17 +1,24 @@
 package app.theia.android
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.DeviceConfigurationOverride
+import androidx.compose.ui.test.FontScale
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
+import androidx.activity.ComponentActivity
 import app.theia.android.album.AlbumLabScreen
 import app.theia.android.album.AlbumMetadataRepository
 import app.theia.android.album.AlbumPhoto
@@ -34,10 +41,10 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ComposeFlowTest {
     @get:Rule
-    val compose = createComposeRule()
+    val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val context
-        get() = InstrumentationRegistry.getInstrumentation().targetContext
+        get() = compose.activity
 
     @Test
     fun onboardingCanBeSkippedAndExposesItsBrandMarkLabel() {
@@ -51,6 +58,21 @@ class ComposeFlowTest {
         compose.onNodeWithText(context.getString(R.string.onboarding_skip)).performClick()
 
         assertEquals(true, skipped)
+    }
+
+    @Test
+    fun onboardingSkipRemainsAccessibleAndLargeTextCanScrollIntoView() {
+        compose.setContent {
+            DeviceConfigurationOverride(DeviceConfigurationOverride.Companion.FontScale(2f)) {
+                OnboardingScreen(onGetStarted = {}, onSkip = {})
+            }
+        }
+
+        val skip = compose.onNodeWithText(context.getString(R.string.onboarding_skip))
+        skip.assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test

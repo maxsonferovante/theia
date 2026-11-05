@@ -13,6 +13,7 @@ import android.util.Range
 import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.DynamicRange
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -29,6 +30,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +39,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -120,6 +123,8 @@ fun VideoCaptureScreen(
     var audioDenied by remember { mutableStateOf(false) }
     var includeAudio by remember { mutableStateOf(false) }
     var selectedVideoStyleId by remember { mutableStateOf(BuiltInVideoStyles.EQUIPMENT_RECIPE_ID) }
+    var highResolutionSupported by remember { mutableStateOf(false) }
+    var highResolutionEnabled by remember { mutableStateOf(false) }
     var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var session by remember { mutableStateOf<VideoCameraSession?>(null) }
@@ -156,7 +161,7 @@ fun VideoCaptureScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(previewView, cameraGranted, lensFacing, lifecycleOwner, recipe, selectedVideoStyleId, retryCamera) {
+    LaunchedEffect(previewView, cameraGranted, lensFacing, lifecycleOwner, recipe, selectedVideoStyleId, highResolutionEnabled, retryCamera) {
         val view = previewView
         if (view == null || !cameraGranted) {
             session = null
@@ -173,12 +178,20 @@ fun VideoCaptureScreen(
             val provider = ProcessCameraProvider.getInstance(context).await(ContextCompat.getMainExecutor(context))
             val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
             check(provider.hasCamera(selector)) { context.getString(R.string.video_camera_unavailable) }
-            val preview = Preview.Builder()
-                .setTargetRotation(view.display?.rotation ?: Surface.ROTATION_0)
-                .build()
-                .also { it.surfaceProvider = view.surfaceProvider }
-            fun bind(prefer30Fps: Boolean): Pair<VideoCapture<Recorder>, FilmPreviewEffect> {
-                val capture = buildVideoCapture(prefer30Fps)
+            val supportsUhd = Recorder.getVideoCapabilities(provider.getCameraInfo(selector))
+                .getSupportedQualities(DynamicRange.SDR)
+                .contains(Quality.UHD)
+            highResolutionSupported = supportsUhd
+            val requestUhd = highResolutionEnabled && supportsUhd
+            if (!supportsUhd && highResolutionEnabled) highResolutionEnabled = false
+            fun bind(prefer30Fps: Boolean, preferUhd: Boolean): VideoCameraSession {
+                val previewBuilder = Preview.Builder()
+                if (prefer30Fps) previewBuilder.setTargetFrameRate(Range(30, 30))
+                val preview = previewBuilder
+                    .setTargetRotation(view.display?.rotation ?: Surface.ROTATION_0)
+                    .build()
+                    .also { it.surfaceProvider = view.surfaceProvider }
+                val capture = buildVideoCapture(prefer30Fps, preferUhd)
                 val effect = FilmPreviewEffect(
                     recipe,
                     includeVideoTarget = true,
@@ -189,31 +202,59 @@ fun VideoCaptureScreen(
                         }
                     },
                 )
-                val group = androidx.camera.core.UseCaseGroup.Builder()
-                    .addUseCase(preview)
-                    .addUseCase(capture)
-                    .addEffect(effect)
-                    .apply { view.viewPort?.let(::setViewPort) }
-                    .build()
                 try {
+                    val group = androidx.camera.core.UseCaseGroup.Builder()
+                        .addUseCase(preview)
+                        .addUseCase(capture)
+                        .addEffect(effect)
+                        .apply { view.viewPort?.let(::setViewPort) }
+                        .build()
                     provider.bindToLifecycle(lifecycleOwner, selector, group)
-                    return capture to effect
+                    return VideoCameraSession(provider, preview, capture, effect)
                 } catch (error: Exception) {
+                    runCatching { provider.unbind(preview, capture) }
+                        .exceptionOrNull()
+                        ?.let(error::addSuppressed)
                     effect.release()
                     throw error
                 }
             }
-            val (capture, effect) = try {
-                bind(prefer30Fps = true)
-            } catch (preferredFailure: Exception) {
+            session = if (requestUhd) {
                 try {
-                    bind(prefer30Fps = false)
-                } catch (fallbackFailure: Exception) {
-                    fallbackFailure.addSuppressed(preferredFailure)
-                    throw fallbackFailure
+                    bind(prefer30Fps = true, preferUhd = true)
+                } catch (uhdFailure: Exception) {
+                    try {
+                        bind(prefer30Fps = true, preferUhd = false).also {
+                            highResolutionEnabled = false
+                            captureMessage = context.getString(R.string.video_resolution_fallback)
+                        }
+                    } catch (fhdFailure: Exception) {
+                        try {
+                            bind(prefer30Fps = false, preferUhd = false).also {
+                                highResolutionEnabled = false
+                                captureMessage = context.getString(R.string.video_resolution_fallback)
+                            }
+                        } catch (fallbackFailure: Exception) {
+                            fallbackFailure.addSuppressed(fhdFailure)
+                            fallbackFailure.addSuppressed(uhdFailure)
+                            throw fallbackFailure
+                        }
+                    }
+                }
+            } else {
+                try {
+                    bind(prefer30Fps = true, preferUhd = false)
+                } catch (preferredFailure: Exception) {
+                    try {
+                        bind(prefer30Fps = false, preferUhd = false).also {
+                            captureMessage = context.getString(R.string.video_resolution_fallback)
+                        }
+                    } catch (fallbackFailure: Exception) {
+                        fallbackFailure.addSuppressed(preferredFailure)
+                        throw fallbackFailure
+                    }
                 }
             }
-            session = VideoCameraSession(provider, preview, capture, effect)
         } catch (error: Exception) {
             cameraError = error.localizedMessage ?: context.getString(R.string.video_camera_start_failed)
         }
@@ -300,8 +341,10 @@ fun VideoCaptureScreen(
                 }
 
                 Column(
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .background(VideoNavy.copy(alpha = 0.85f)).padding(horizontal = 20.dp, vertical = 20.dp),
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 480.dp)
+                        .background(VideoNavy.copy(alpha = 0.85f))
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -326,6 +369,33 @@ fun VideoCaptureScreen(
                                 onClick = { if (activeRecording == null) selectedVideoStyleId = styleId },
                                 enabled = activeRecording == null,
                                 label = { Text(stringResource(requireNotNull(nameResource)), maxLines = 1) },
+                            )
+                        }
+                    }
+                    if (highResolutionSupported) {
+                        Text(stringResource(R.string.video_resolution_label), color = VideoIvory, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = !highResolutionEnabled,
+                                onClick = {
+                                    if (activeRecording == null) {
+                                        highResolutionEnabled = false
+                                        captureMessage = null
+                                    }
+                                },
+                                enabled = activeRecording == null,
+                                label = { Text(stringResource(R.string.video_resolution_1080p)) },
+                            )
+                            FilterChip(
+                                selected = highResolutionEnabled,
+                                onClick = {
+                                    if (activeRecording == null) {
+                                        highResolutionEnabled = true
+                                        captureMessage = null
+                                    }
+                                },
+                                enabled = activeRecording == null,
+                                label = { Text(stringResource(R.string.video_resolution_4k)) },
                             )
                         }
                     }
@@ -460,10 +530,16 @@ private fun PermissionCard(
     }
 }
 
-private fun buildVideoCapture(prefer30Fps: Boolean): VideoCapture<Recorder> {
+private fun buildVideoCapture(prefer30Fps: Boolean, preferUhd: Boolean = false): VideoCapture<Recorder> {
+    val qualities = if (preferUhd) {
+        listOf(Quality.UHD, Quality.FHD)
+    } else {
+        listOf(Quality.FHD, Quality.HD, Quality.SD)
+    }
     val selector = QualitySelector.fromOrderedList(
-        listOf(Quality.FHD, Quality.HD, Quality.SD),
-        FallbackStrategy.lowerQualityOrHigherThan(Quality.SD),
+        qualities,
+        if (preferUhd) FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)
+        else FallbackStrategy.lowerQualityThan(Quality.FHD),
     )
     val recorder = Recorder.Builder().setQualitySelector(selector).build()
     return if (prefer30Fps) {

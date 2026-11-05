@@ -297,6 +297,10 @@
 "capture_error_photo_prepare" = "The camera could not prepare this photo. Try capturing again.";
 "video_title" = "Video";
 "video_style_label" = "Video look";
+"video_resolution_label" = "Video resolution";
+"video_resolution_1080p" = "1080p";
+"video_resolution_4k" = "4K · 30 fps";
+"video_resolution_fallback" = "The requested resolution is unavailable; using %@ instead.";
 "video_style_recipe" = "Equipment";
 "video_style_cinematic_warm" = "Warm cinema";
 "video_style_moonlit_monochrome" = "Moonlight mono";
@@ -306,8 +310,8 @@
 "video_audio_toggle" = "Record audio";
 "video_audio_accessibility" = "Record video audio";
 "video_duration_format" = "%ds / 60s";
-"video_quality_format" = "1080p · %d fps";
-"video_quality_device_default" = "Device default frame rate";
+"video_quality_format" = "%@ · %d fps";
+"video_quality_device_default" = "Camera format unavailable";
 "video_start" = "Start video recording";
 "video_stop" = "Stop video recording";
 "video_camera_permission_denied" = "Allow camera access in Settings to record a video.";
@@ -317,7 +321,7 @@
 "video_microphone_unavailable" = "Microphone access is unavailable. Video recording will stay silent.";
 "video_record_error_format" = "The video could not be recorded: %@";
 "video_camera_unavailable" = "No compatible video camera is available on this device.";
-"video_frame_rate_fallback" = "The camera cannot set the requested frame rate. Using its default.";
+"video_frame_rate_fallback" = "The camera cannot maintain 30 fps at this resolution. Using a supported frame rate.";
 "video_microphone_configuration_error" = "The microphone is not available in the current camera configuration.";
 "video_photo_permission_error" = "Allow Théia to add videos in Settings to save this recording.";
 "video_save_error" = "The video could not be saved to Photos. Try recording again.";

@@ -297,6 +297,10 @@
 "capture_error_photo_prepare" = "A câmera não conseguiu preparar esta foto. Tente capturar novamente.";
 "video_title" = "Vídeo";
 "video_style_label" = "Estilo do vídeo";
+"video_resolution_label" = "Resolução do vídeo";
+"video_resolution_1080p" = "1080p";
+"video_resolution_4k" = "4K · 30 fps";
+"video_resolution_fallback" = "A resolução solicitada não está disponível; usando %@.";
 "video_style_recipe" = "Equipamento";
 "video_style_cinematic_warm" = "Cinema quente";
 "video_style_moonlit_monochrome" = "Lunar mono";
@@ -306,8 +310,8 @@
 "video_audio_toggle" = "Gravar áudio";
 "video_audio_accessibility" = "Gravar áudio do vídeo";
 "video_duration_format" = "%ds / 60s";
-"video_quality_format" = "1080p · %d fps";
-"video_quality_device_default" = "Taxa de quadros padrão do dispositivo";
+"video_quality_format" = "%@ · %d fps";
+"video_quality_device_default" = "Formato da câmera indisponível";
 "video_start" = "Iniciar gravação de vídeo";
 "video_stop" = "Parar gravação de vídeo";
 "video_camera_permission_denied" = "Permita o acesso à câmera nos Ajustes para gravar um vídeo.";
@@ -317,7 +321,7 @@
 "video_microphone_unavailable" = "O acesso ao microfone está indisponível. O vídeo será gravado sem som.";
 "video_record_error_format" = "Não foi possível gravar o vídeo: %@";
 "video_camera_unavailable" = "Não há uma câmera de vídeo compatível neste dispositivo.";
-"video_frame_rate_fallback" = "A câmera não pode usar a taxa de quadros solicitada. Usando o padrão do dispositivo.";
+"video_frame_rate_fallback" = "A câmera não consegue manter 30 fps nesta resolução. Usando uma taxa compatível.";
 "video_microphone_configuration_error" = "O microfone não está disponível nesta configuração da câmera.";
 "video_photo_permission_error" = "Permita que Théia adicione vídeos nos Ajustes para salvar esta gravação.";
 "video_save_error" = "Não foi possível salvar o vídeo no Fotos. Tente gravar novamente.";

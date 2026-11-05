@@ -61,11 +61,16 @@ private class FilmSurfaceProcessor(
     private var eglConfig: android.opengl.EGLConfig? = null
     private var pbuffer = EGL14.EGL_NO_SURFACE
     private var program = 0
+    private var locations: ProgramLocations? = null
     private var textureId = 0
     private var cameraSurfaceTexture: SurfaceTexture? = null
     private var cameraInputSurface: Surface? = null
     private var size = Size(0, 0)
     private val errorReported = AtomicBoolean(false)
+    private val sourceMatrix = FloatArray(16)
+    private val transformedMatrix = FloatArray(16)
+    private val fullscreenVertexBuffer = buffer(FULLSCREEN_VERTICES)
+    private val textureCoordinateBuffer = buffer(TEXTURE_COORDS)
 
     override fun onInputSurface(request: SurfaceRequest) {
         handler.post {
@@ -85,6 +90,7 @@ private class FilmSurfaceProcessor(
                 GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
                 GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
                 program = createProgram(VERTEX_SHADER, fragmentShader())
+                locations = ProgramLocations(program)
                 cameraSurfaceTexture = SurfaceTexture(textureId).apply {
                     setDefaultBufferSize(size.width, size.height)
                     setOnFrameAvailableListener({ source -> renderFrame(source) }, handler)
@@ -165,31 +171,28 @@ private class FilmSurfaceProcessor(
         if (released.get() || program == 0 || outputs.isEmpty()) return
         try {
             source.updateTexImage()
-            val sourceMatrix = FloatArray(16)
             source.getTransformMatrix(sourceMatrix)
-            outputs.toList().forEach { output ->
+            outputs.forEach { output ->
                 if (!EGL14.eglMakeCurrent(eglDisplay, output.eglSurface, output.eglSurface, eglContext)) return@forEach
                 val surfaceSize = output.output.size
                 GLES20.glViewport(0, 0, surfaceSize.width, surfaceSize.height)
                 GLES20.glUseProgram(program)
-                val transformed = FloatArray(16)
-                output.output.updateTransformMatrix(transformed, sourceMatrix)
-                GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "uTexMatrix"), 1, false, transformed, 0)
+                val programLocations = requireNotNull(locations)
+                output.output.updateTransformMatrix(transformedMatrix, sourceMatrix)
+                GLES20.glUniformMatrix4fv(programLocations.textureMatrix, 1, false, transformedMatrix, 0)
                 bindProfileUniforms(surfaceSize)
                 GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
                 GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
-                GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "uCamera"), 0)
-                val vertices = vertexBuffer(FULLSCREEN_VERTICES)
-                val coords = vertexBuffer(TEXTURE_COORDS)
-                val position = GLES20.glGetAttribLocation(program, "aPosition")
-                val texCoord = GLES20.glGetAttribLocation(program, "aTexCoord")
-                GLES20.glEnableVertexAttribArray(position)
-                GLES20.glEnableVertexAttribArray(texCoord)
-                GLES20.glVertexAttribPointer(position, 2, GLES20.GL_FLOAT, false, 0, vertices)
-                GLES20.glVertexAttribPointer(texCoord, 2, GLES20.GL_FLOAT, false, 0, coords)
+                GLES20.glUniform1i(programLocations.camera, 0)
+                fullscreenVertexBuffer.position(0)
+                textureCoordinateBuffer.position(0)
+                GLES20.glEnableVertexAttribArray(programLocations.position)
+                GLES20.glEnableVertexAttribArray(programLocations.textureCoordinate)
+                GLES20.glVertexAttribPointer(programLocations.position, 2, GLES20.GL_FLOAT, false, 0, fullscreenVertexBuffer)
+                GLES20.glVertexAttribPointer(programLocations.textureCoordinate, 2, GLES20.GL_FLOAT, false, 0, textureCoordinateBuffer)
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-                GLES20.glDisableVertexAttribArray(position)
-                GLES20.glDisableVertexAttribArray(texCoord)
+                GLES20.glDisableVertexAttribArray(programLocations.position)
+                GLES20.glDisableVertexAttribArray(programLocations.textureCoordinate)
                 check(EGL14.eglSwapBuffers(eglDisplay, output.eglSurface)) { "CameraX EGL frame swap failed" }
             }
         } catch (failure: Throwable) {
@@ -202,22 +205,23 @@ private class FilmSurfaceProcessor(
     }
 
     private fun bindProfileUniforms(outputSize: Size) {
-        fun float(name: String, value: Float) = GLES20.glUniform1f(GLES20.glGetUniformLocation(program, name), value)
-        float("uExposure", 2.0.pow(profile.exposureBiasEv).toFloat())
-        float("uContrast", profile.contrast.toFloat())
-        float("uSaturation", profile.saturation.toFloat())
-        float("uWarmth", profile.warmth.toFloat())
-        float("uGreenMagenta", profile.greenMagenta.toFloat())
-        float("uHighlightRollOff", profile.highlightRollOff.toFloat())
-        float("uShadowLift", profile.shadowLift.toFloat())
-        float("uGrain", profile.grainIntensity.toFloat())
-        float("uGrainScale", profile.grainScale.toFloat())
-        float("uVignette", profile.vignette.toFloat())
-        float("uBloom", profile.bloom.toFloat())
-        float("uHalation", profile.halation.toFloat())
-        float("uEdgeSoftness", profile.edgeSoftness.toFloat())
-        float("uDistortion", profile.distortion.toFloat())
-        GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "uResolution"), outputSize.width.toFloat(), outputSize.height.toFloat())
+        val programLocations = requireNotNull(locations)
+        fun float(location: Int, value: Float) = GLES20.glUniform1f(location, value)
+        float(programLocations.exposure, 2.0.pow(profile.exposureBiasEv).toFloat())
+        float(programLocations.contrast, profile.contrast.toFloat())
+        float(programLocations.saturation, profile.saturation.toFloat())
+        float(programLocations.warmth, profile.warmth.toFloat())
+        float(programLocations.greenMagenta, profile.greenMagenta.toFloat())
+        float(programLocations.highlightRollOff, profile.highlightRollOff.toFloat())
+        float(programLocations.shadowLift, profile.shadowLift.toFloat())
+        float(programLocations.grain, profile.grainIntensity.toFloat())
+        float(programLocations.grainScale, profile.grainScale.toFloat())
+        float(programLocations.vignette, profile.vignette.toFloat())
+        float(programLocations.bloom, profile.bloom.toFloat())
+        float(programLocations.halation, profile.halation.toFloat())
+        float(programLocations.edgeSoftness, profile.edgeSoftness.toFloat())
+        float(programLocations.distortion, profile.distortion.toFloat())
+        GLES20.glUniform2f(programLocations.resolution, outputSize.width.toFloat(), outputSize.height.toFloat())
     }
 
     private fun ensureEgl() {
@@ -267,6 +271,7 @@ private class FilmSurfaceProcessor(
     private fun destroyGlObjects() {
         if (program != 0) GLES20.glDeleteProgram(program)
         program = 0
+        locations = null
         if (textureId != 0) GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
         textureId = 0
         if (eglDisplay != EGL14.EGL_NO_DISPLAY && pbuffer != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, pbuffer)
@@ -298,10 +303,29 @@ private class FilmSurfaceProcessor(
         return shader
     }
 
-    private fun vertexBuffer(values: FloatArray): FloatBuffer = ByteBuffer.allocateDirect(values.size * 4)
-        .order(ByteOrder.nativeOrder()).asFloatBuffer().put(values).apply { position(0) }
-
     private data class OutputTarget(val output: SurfaceOutput, val surface: Surface, val eglSurface: android.opengl.EGLSurface)
+
+    private class ProgramLocations(program: Int) {
+        val position = GLES20.glGetAttribLocation(program, "aPosition")
+        val textureCoordinate = GLES20.glGetAttribLocation(program, "aTexCoord")
+        val camera = GLES20.glGetUniformLocation(program, "uCamera")
+        val textureMatrix = GLES20.glGetUniformLocation(program, "uTexMatrix")
+        val resolution = GLES20.glGetUniformLocation(program, "uResolution")
+        val exposure = GLES20.glGetUniformLocation(program, "uExposure")
+        val contrast = GLES20.glGetUniformLocation(program, "uContrast")
+        val saturation = GLES20.glGetUniformLocation(program, "uSaturation")
+        val warmth = GLES20.glGetUniformLocation(program, "uWarmth")
+        val greenMagenta = GLES20.glGetUniformLocation(program, "uGreenMagenta")
+        val highlightRollOff = GLES20.glGetUniformLocation(program, "uHighlightRollOff")
+        val shadowLift = GLES20.glGetUniformLocation(program, "uShadowLift")
+        val grain = GLES20.glGetUniformLocation(program, "uGrain")
+        val grainScale = GLES20.glGetUniformLocation(program, "uGrainScale")
+        val vignette = GLES20.glGetUniformLocation(program, "uVignette")
+        val bloom = GLES20.glGetUniformLocation(program, "uBloom")
+        val halation = GLES20.glGetUniformLocation(program, "uHalation")
+        val edgeSoftness = GLES20.glGetUniformLocation(program, "uEdgeSoftness")
+        val distortion = GLES20.glGetUniformLocation(program, "uDistortion")
+    }
 
     private fun fragmentShader() = """
         #extension GL_OES_EGL_image_external : require
@@ -359,5 +383,8 @@ private class FilmSurfaceProcessor(
         """
         val FULLSCREEN_VERTICES = floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
         val TEXTURE_COORDS = floatArrayOf(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f)
+
+        private fun buffer(values: FloatArray): FloatBuffer = ByteBuffer.allocateDirect(values.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer().put(values).apply { position(0) }
     }
 }
