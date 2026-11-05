@@ -368,6 +368,7 @@ fun VideoCaptureScreen(
                                 selected = selectedVideoStyleId == styleId,
                                 onClick = { if (activeRecording == null) selectedVideoStyleId = styleId },
                                 enabled = activeRecording == null,
+                                modifier = Modifier.heightIn(min = 48.dp),
                                 label = { Text(stringResource(requireNotNull(nameResource)), maxLines = 1) },
                             )
                         }
@@ -384,6 +385,7 @@ fun VideoCaptureScreen(
                                     }
                                 },
                                 enabled = activeRecording == null,
+                                modifier = Modifier.heightIn(min = 48.dp),
                                 label = { Text(stringResource(R.string.video_resolution_1080p)) },
                             )
                             FilterChip(
@@ -395,6 +397,7 @@ fun VideoCaptureScreen(
                                     }
                                 },
                                 enabled = activeRecording == null,
+                                modifier = Modifier.heightIn(min = 48.dp),
                                 label = { Text(stringResource(R.string.video_resolution_4k)) },
                             )
                         }
@@ -402,6 +405,7 @@ fun VideoCaptureScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                             .toggleable(
                                 value = includeAudio,
                                 role = Role.Checkbox,
@@ -589,14 +593,13 @@ private fun startVideoRecording(
             put(MediaStore.Video.Media.DATA, java.io.File(dir, displayName).absolutePath)
         }
     }
-    val output = MediaStoreOutputOptions.Builder(
-        context.contentResolver,
-        MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-    ).setContentValues(values)
-        .setDurationLimitMillis(MAX_RECORDING_DURATION_MILLIS)
-        .build()
-
     try {
+        val output = MediaStoreOutputOptions.Builder(
+            context.contentResolver,
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+        ).setContentValues(values)
+            .setDurationLimitMillis(MAX_RECORDING_DURATION_MILLIS)
+            .build()
         var pending = capture.output.prepareRecording(context, output)
         if (withAudio) pending = pending.withAudioEnabled()
         val startedAtElapsed = SystemClock.elapsedRealtime()
@@ -612,26 +615,35 @@ private fun startVideoRecording(
                     val hasUsableOutput = event.error == VideoRecordEvent.Finalize.ERROR_NONE ||
                         event.error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED
                     if (hasUsableOutput && uri != Uri.EMPTY) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            context.contentResolver.update(uri, ContentValues().apply {
-                                put(MediaStore.MediaColumns.IS_PENDING, 0)
-                            }, null, null)
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                check(context.contentResolver.update(uri, ContentValues().apply {
+                                    put(MediaStore.MediaColumns.IS_PENDING, 0)
+                                }, null, null) > 0) {
+                                    context.getString(R.string.video_storage_failed)
+                                }
+                            }
+                            val size = capture.resolutionInfo?.resolution
+                            onResult(VideoCaptureOutcome.Saved(
+                                VideoCaptureResult(
+                                    uri = uri,
+                                    capturedAtEpochMillis = capturedAt,
+                                    durationMillis = duration,
+                                    widthPixels = size?.width ?: 1920,
+                                    heightPixels = size?.height ?: 1080,
+                                    framesPerSecond = capture.targetFrameRate.upper,
+                                    includesAudio = withAudio,
+                                    videoStyleId = videoStyleId,
+                                ),
+                            ))
+                        } catch (failure: Exception) {
+                            runCatching { context.contentResolver.delete(uri, null, null) }
+                            onResult(VideoCaptureOutcome.Failed(
+                                failure.localizedMessage ?: context.getString(R.string.video_storage_failed),
+                            ))
                         }
-                        val size = capture.resolutionInfo?.resolution
-                        onResult(VideoCaptureOutcome.Saved(
-                            VideoCaptureResult(
-                                uri = uri,
-                                capturedAtEpochMillis = capturedAt,
-                                durationMillis = duration,
-                                widthPixels = size?.width ?: 1920,
-                                heightPixels = size?.height ?: 1080,
-                                framesPerSecond = capture.targetFrameRate.upper,
-                                includesAudio = withAudio,
-                                videoStyleId = videoStyleId,
-                            ),
-                        ))
                     } else {
-                        if (uri != Uri.EMPTY) context.contentResolver.delete(uri, null, null)
+                        if (uri != Uri.EMPTY) runCatching { context.contentResolver.delete(uri, null, null) }
                         onResult(VideoCaptureOutcome.Failed(event.cause?.localizedMessage ?: context.getString(R.string.video_capture_failed)))
                     }
                 }
@@ -639,7 +651,9 @@ private fun startVideoRecording(
         }
         onRecording(active)
     } catch (error: SecurityException) {
-        onResult(VideoCaptureOutcome.Failed(context.getString(R.string.video_microphone_denied)))
+        onResult(VideoCaptureOutcome.Failed(
+            context.getString(if (withAudio) R.string.video_microphone_denied else R.string.video_storage_failed),
+        ))
     } catch (error: Exception) {
         onResult(VideoCaptureOutcome.Failed(error.localizedMessage ?: context.getString(R.string.video_capture_failed)))
     }

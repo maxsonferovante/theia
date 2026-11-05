@@ -173,6 +173,7 @@ fun AlbumLabScreen(
                         FilterChip(
                             selected = filter == option,
                             onClick = { filter = option },
+                            modifier = Modifier.heightIn(min = 48.dp),
                             label = { Text(stringResource(option.labelResource())) },
                         )
                     }
@@ -183,6 +184,7 @@ fun AlbumLabScreen(
                         FilterChip(
                             selected = grouping == option,
                             onClick = { grouping = option },
+                            modifier = Modifier.heightIn(min = 48.dp),
                             label = { Text(stringResource(option.labelResource())) },
                         )
                     }
@@ -502,14 +504,22 @@ private fun DeletePhotoDialog(photo: AlbumPhoto, onDismiss: () -> Unit, onConfir
                         checked = deleteDevelopedCopy,
                         onCheckedChange = { deleteDevelopedCopy = it },
                         enabled = photo.originalUri.isNotBlank(),
-                        modifier = Modifier.semantics { contentDescription = galleryDeleteLabel },
+                        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = galleryDeleteLabel },
                     )
                     Text(stringResource(R.string.album_delete_gallery_copy))
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(deleteDevelopedCopy) }) { Text(stringResource(R.string.album_delete_confirm)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.album_cancel)) } },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(deleteDevelopedCopy) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.album_delete_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.album_cancel))
+            }
+        },
     )
 }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -70,7 +71,7 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (onBack != null) TextButton(onClick = onBack) { Text(stringResource(R.string.back_to_preview)) }
+                    if (onBack != null) TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.back_to_preview)) }
                     Text(
                         text = stringResource(R.string.settings_title),
                         color = SettingsIvory,
@@ -181,7 +182,7 @@ private fun PreferenceSwitch(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.semantics {
+            modifier = Modifier.heightIn(min = 48.dp).semantics {
                 contentDescription = title
                 stateDescription = state
             },
@@ -209,6 +210,7 @@ private fun LanguageOption(tag: String, label: String, selectedTag: String, onSe
     FilterChip(
         selected = selectedTag.equals(tag, ignoreCase = true),
         onClick = { onSelect(tag) },
+        modifier = Modifier.heightIn(min = 48.dp),
         label = { Text(label) },
     )
 }
@@ -240,11 +242,11 @@ private fun PermissionRow(
         Text(description, color = SettingsStone, fontSize = 12.sp)
         if (status != PermissionStatus.GRANTED) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { onRequestPermission(permission) }) {
+                TextButton(onClick = { onRequestPermission(permission) }, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text(stringResource(R.string.settings_permission_request))
                 }
                 if (status == PermissionStatus.DENIED || status == PermissionStatus.RESTRICTED) {
-                    TextButton(onClick = onOpenAppSettings) {
+                    TextButton(onClick = onOpenAppSettings, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(stringResource(R.string.settings_permission_recovery))
                     }
                 }

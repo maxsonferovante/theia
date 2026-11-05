@@ -134,6 +134,7 @@ fun AlbumRollPanel(
                 FilterChip(
                     selected = capacity == option,
                     onClick = { capacity = option },
+                    modifier = Modifier.heightIn(min = 48.dp),
                     label = {
                         Text(stringResource(if (option == FilmRollCapacity.EXPOSURES_24) R.string.album_roll_capacity_24 else R.string.album_roll_capacity_36))
                     },
@@ -151,7 +152,7 @@ fun AlbumRollPanel(
             Button(
                 onClick = { runRollAction { service.createRoll(selectedRecipe, capacity) } },
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) { Text(stringResource(R.string.album_roll_start)) }
         }
         errorMessage?.takeIf(String::isNotBlank)?.let {
@@ -188,9 +189,13 @@ fun AlbumRollPanel(
                 Button(onClick = {
                     earlyCandidate = null
                     runRollAction { service.developRoll(record.roll.id, allowEarly = true) }
-                }) { Text(stringResource(R.string.album_roll_develop_early)) }
+                }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.album_roll_develop_early)) }
             },
-            dismissButton = { TextButton(onClick = { earlyCandidate = null }) { Text(stringResource(R.string.album_roll_cancel)) } },
+            dismissButton = {
+                TextButton(onClick = { earlyCandidate = null }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.album_roll_cancel))
+                }
+            },
         )
     }
 }
@@ -241,12 +246,18 @@ private fun RollCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!developed && !active && !full) {
-                    TextButton(onClick = onActivate, enabled = !busy) { Text(stringResource(R.string.album_roll_activate)) }
+                    TextButton(onClick = onActivate, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.album_roll_activate))
+                    }
                 }
                 if (!developed && full) {
-                    Button(onClick = onDevelopFull, enabled = !busy) { Text(stringResource(R.string.album_roll_develop_full)) }
+                    Button(onClick = onDevelopFull, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.album_roll_develop_full))
+                    }
                 } else if (!developed && count > 0) {
-                    TextButton(onClick = onDevelopEarly, enabled = !busy) { Text(stringResource(R.string.album_roll_develop_early)) }
+                    TextButton(onClick = onDevelopEarly, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.album_roll_develop_early))
+                    }
                 }
             }
         }

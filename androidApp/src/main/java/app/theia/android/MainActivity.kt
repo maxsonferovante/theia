@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
@@ -209,16 +210,16 @@ private fun TheiaAppScreen() {
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Button(onClick = { destination = AppDestination.WORKBENCH }) {
+                        Button(onClick = { destination = AppDestination.WORKBENCH }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(stringResource(R.string.open_workbench))
                         }
-                        Button(onClick = { destination = AppDestination.ALBUM }) {
+                        Button(onClick = { destination = AppDestination.ALBUM }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(stringResource(R.string.open_album))
                         }
-                        Button(onClick = { destination = AppDestination.VIDEO }) {
+                        Button(onClick = { destination = AppDestination.VIDEO }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(stringResource(R.string.open_video))
                         }
-                        Button(onClick = { destination = AppDestination.SETTINGS }) {
+                        Button(onClick = { destination = AppDestination.SETTINGS }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(stringResource(R.string.open_settings))
                         }
                     }

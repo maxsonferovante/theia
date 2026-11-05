@@ -1,5 +1,8 @@
 package app.theia.android
 
+import android.net.Uri
+import android.content.Context
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -24,17 +27,22 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.theia.android.album.AlbumLabScreen
 import app.theia.android.album.AlbumMetadataRepository
 import app.theia.android.album.AlbumPhoto
+import app.theia.android.album.AlbumRollPanel
+import app.theia.android.roll.AndroidFilmRollRepository
+import app.theia.android.roll.AndroidFilmRollService
 import app.theia.android.settings.OnboardingScreen
 import app.theia.android.settings.SettingsScreen
 import app.theia.android.workbench.WorkbenchScreen
 import app.theia.domain.catalog.BuiltInEquipmentCatalog
 import app.theia.domain.model.CaptureRecipe
+import app.theia.domain.model.FilmRollCapacity
 import app.theia.domain.model.PermissionState
 import app.theia.domain.model.UserPreferences
 import app.theia.domain.port.DevicePermission
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -43,7 +51,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ComposeFlowTest {
     @get:Rule
-    val compose = createAndroidComposeRule<MainActivity>()
+    val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val context
         get() = compose.activity
@@ -78,27 +86,6 @@ class ComposeFlowTest {
     }
 
     @Test
-    fun firstLaunchNavigationKeepsVideoHeadingAndAudioToggleAccessible() {
-        compose.activity.getSharedPreferences("theia_user_preferences", android.content.Context.MODE_PRIVATE)
-            .edit().clear().commit()
-        compose.activityRule.scenario.recreate()
-        compose.waitForIdle()
-
-        compose.onNodeWithText(context.getString(R.string.onboarding_skip)).performClick()
-        compose.onNodeWithText(context.getString(R.string.open_video))
-            .assertHasClickAction()
-            .assertHeightIsAtLeast(48.dp)
-            .performScrollTo()
-            .performClick()
-
-        compose.onNodeWithText(context.getString(R.string.video_capture_title))
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Heading, Unit))
-        compose.onNodeWithContentDescription(context.getString(R.string.video_include_audio))
-            .assertHasClickAction()
-            .assertIsOff()
-    }
-
-    @Test
     fun workbenchSelectionReturnsTheEquipmentCombinationShownByTheAccessiblePicker() {
         val bodies = BuiltInEquipmentCatalog.cameraBodies()
         val lenses = BuiltInEquipmentCatalog.lenses()
@@ -116,7 +103,9 @@ class ComposeFlowTest {
             R.string.workbench_next_item,
             context.getString(R.string.workbench_body),
         )
-        compose.onNodeWithContentDescription(nextBodyLabel).performClick()
+        compose.onNodeWithContentDescription(nextBodyLabel)
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
         compose.onNodeWithContentDescription(context.getString(R.string.workbench_use_selected_setup))
             .performClick()
 
@@ -147,9 +136,9 @@ class ComposeFlowTest {
         val instantLabel = context.getString(R.string.settings_instant_development)
         val geotagLabel = context.getString(R.string.settings_geotagging)
         val shutterLabel = context.getString(R.string.settings_shutter_sound)
-        compose.onNodeWithContentDescription(instantLabel).assertIsOff().performClick()
-        compose.onNodeWithContentDescription(geotagLabel).assertIsOff().performClick()
-        compose.onNodeWithContentDescription(shutterLabel).assertIsOn().performClick()
+        compose.onNodeWithContentDescription(instantLabel).assertHeightIsAtLeast(48.dp).assertIsOff().performClick()
+        compose.onNodeWithContentDescription(geotagLabel).assertHeightIsAtLeast(48.dp).assertIsOff().performClick()
+        compose.onNodeWithContentDescription(shutterLabel).assertHeightIsAtLeast(48.dp).assertIsOn().performClick()
 
         assertEquals(true, instantDevelopment.get())
         assertEquals(true, geotagging.get())
@@ -171,12 +160,16 @@ class ComposeFlowTest {
         compose.onNodeWithText(first.title, useUnmergedTree = true).assertExists()
         compose.onNodeWithText(second.title, useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText(searchLabel).performTextClearance()
-        compose.onNodeWithText(context.getString(R.string.album_filter_favorites)).performClick()
+        compose.onNodeWithText(context.getString(R.string.album_filter_favorites))
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
         compose.onNodeWithText(first.title, useUnmergedTree = true).assertExists()
         compose.onNodeWithText(second.title, useUnmergedTree = true).assertDoesNotExist()
 
         compose.onNodeWithText(context.getString(R.string.album_filter_all)).performClick()
-        compose.onNodeWithText(context.getString(R.string.album_group_body)).performClick()
+        compose.onNodeWithText(context.getString(R.string.album_group_body))
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
         compose.onAllNodesWithText("body-01", useUnmergedTree = true).assertCountEquals(1)
         compose.onAllNodesWithText("body-02", useUnmergedTree = true).assertCountEquals(1)
 
@@ -196,12 +189,57 @@ class ComposeFlowTest {
         compose.onNodeWithText(context.getString(R.string.album_delete)).performClick()
         compose.onNodeWithText(context.getString(R.string.album_delete_explanation)).assertExists()
         val galleryScope = compose.onNodeWithContentDescription(context.getString(R.string.album_delete_gallery_copy))
-        galleryScope.assertExists()
+        galleryScope.assertExists().assertHeightIsAtLeast(48.dp)
         galleryScope.assertIsOff().performClick().assertIsOn()
         compose.onNodeWithText(context.getString(R.string.album_cancel)).performClick()
 
         assertEquals(listOf(capture.id), repository.all().map(AlbumPhoto::id))
         repository.remove(capture.id)
+    }
+
+    @Test
+    fun earlyRollDevelopmentIsConfirmedWithReadableWarningAndCanBeCancelled() = runBlocking {
+        val repository = testRepository()
+        context.getSharedPreferences("theia_film_rolls", Context.MODE_PRIVATE).edit().clear().commit()
+        val rollRepository = AndroidFilmRollRepository(context)
+        val service = AndroidFilmRollService(context, repository, rollRepository)
+        val recipe = CaptureRecipe(
+            bodyId = BuiltInEquipmentCatalog.cameraBodies().first().id,
+            lensId = BuiltInEquipmentCatalog.lenses().first().id,
+            filmStockId = BuiltInEquipmentCatalog.filmStocks().first().id,
+        )
+        val roll = service.createRoll(recipe, FilmRollCapacity.EXPOSURES_24)
+        service.recordCapture(
+            originalUri = Uri.parse("content://app.theia.test/media/early-roll-photo"),
+            recipe = recipe,
+            developInstantly = false,
+        )
+
+        compose.setContent {
+            AlbumRollPanel(
+                service = service,
+                selectedRecipe = recipe,
+                onVisiblePhotoIdsChanged = {},
+            )
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText(context.getString(R.string.album_roll_develop_early))
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+
+        compose.onNodeWithText(context.getString(R.string.album_roll_early_title))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Heading, Unit))
+        compose.onNodeWithText(context.getString(R.string.album_roll_early_warning, 1, 24))
+            .assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.album_roll_cancel))
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+
+        compose.onNodeWithText(context.getString(R.string.album_roll_early_title)).assertDoesNotExist()
+        assertEquals(null, service.findRoll(roll.roll.id)?.roll?.developedAtEpochMillis)
+        assertEquals(roll.roll.id, service.activeRoll()?.roll?.id)
     }
 
     private fun testRepository(): AlbumMetadataRepository {

@@ -488,6 +488,7 @@ fun CameraCaptureScreen(
                                     onClick = { flashChoice = choice },
                                     label = { Text(stringResource(choice.labelResource())) },
                                     enabled = !captureInProgress,
+                                    modifier = Modifier.heightIn(min = 48.dp),
                                 )
                             }
                         }
@@ -508,12 +509,14 @@ fun CameraCaptureScreen(
                                     }))
                                 },
                                 enabled = !captureInProgress && timerCountdown == 0,
+                                modifier = Modifier.heightIn(min = 48.dp),
                             )
                         }
                         FilterChip(
                             selected = gridEnabled,
                             onClick = { gridEnabled = !gridEnabled },
                             label = { Text(stringResource(R.string.camera_grid)) },
+                            modifier = Modifier.heightIn(min = 48.dp),
                         )
                     }
 
@@ -734,12 +737,18 @@ private fun saveOriginal(
             )
         }
     }
-    val outputOptions = ImageCapture.OutputFileOptions.Builder(
-        resolver,
-        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        contentValues,
-    ).build()
-    imageCapture.takePicture(
+    val outputOptions = try {
+        ImageCapture.OutputFileOptions.Builder(
+            resolver,
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            contentValues,
+        ).build()
+    } catch (failure: Exception) {
+        onComplete(Result.failure(failure))
+        return
+    }
+    try {
+        imageCapture.takePicture(
         outputOptions,
         executor,
         object : ImageCapture.OnImageSavedCallback {
@@ -749,13 +758,20 @@ private fun saveOriginal(
                     onComplete(Result.failure(IllegalStateException(context.getString(R.string.camera_gallery_unavailable))))
                     return
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val publishValues = ContentValues().apply {
-                        put(MediaStore.Images.Media.IS_PENDING, 0)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val publishValues = ContentValues().apply {
+                            put(MediaStore.Images.Media.IS_PENDING, 0)
+                        }
+                        check(resolver.update(savedUri, publishValues, null, null) > 0) {
+                            context.getString(R.string.camera_gallery_unavailable)
+                        }
                     }
-                    resolver.update(savedUri, publishValues, null, null)
+                    onComplete(Result.success(savedUri))
+                } catch (failure: Exception) {
+                    runCatching { resolver.delete(savedUri, null, null) }
+                    onComplete(Result.failure(failure))
                 }
-                onComplete(Result.success(savedUri))
             }
 
             override fun onError(exception: ImageCaptureException) {
@@ -768,5 +784,16 @@ private fun saveOriginal(
                 onComplete(Result.failure(exception))
             }
         },
-    )
+        )
+    } catch (failure: Exception) {
+        val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            "${MediaStore.Images.Media.DISPLAY_NAME}=? AND ${MediaStore.Images.Media.IS_PENDING}=1"
+        } else {
+            "${MediaStore.Images.Media.DISPLAY_NAME}=?"
+        }
+        runCatching {
+            resolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, arrayOf(name))
+        }
+        onComplete(Result.failure(failure))
+    }
 }
