@@ -307,6 +307,7 @@
 "video_audio_accessibility" = "Record video audio";
 "video_duration_format" = "%ds / 60s";
 "video_quality_format" = "1080p · %d fps";
+"video_quality_device_default" = "Device default frame rate";
 "video_start" = "Start video recording";
 "video_stop" = "Stop video recording";
 "video_camera_permission_denied" = "Allow camera access in Settings to record a video.";
@@ -399,6 +400,7 @@
 "roll_capture_hint" = "Uses this roll’s fixed camera, lens, and film recipe.";
 "roll_done" = "Done";
 "roll_error_title" = "Film roll error";
+"roll_capture_persistence_error" = "The original is safe in Photos, but Théia could not finish saving its roll details. Open Rolls to review the current roll.";
 "roll_error_not_found" = "This film roll no longer exists.";
 "roll_error_closed" = "This roll is developed or has no exposures remaining.";
 "roll_error_duplicate" = "This photo is already assigned to the roll.";

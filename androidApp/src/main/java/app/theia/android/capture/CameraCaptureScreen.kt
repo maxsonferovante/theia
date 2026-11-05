@@ -140,6 +140,8 @@ fun CameraCaptureScreen(
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var cameraSession by remember { mutableStateOf<CameraSession?>(null) }
     var cameraError by remember { mutableStateOf<String?>(null) }
+    var visualEffectError by remember { mutableStateOf<String?>(null) }
+    var retryCamera by remember { mutableIntStateOf(0) }
     var captureInProgress by remember { mutableStateOf(false) }
     var captureMessage by remember { mutableStateOf<Int?>(null) }
     var flashChoice by remember { mutableStateOf(FlashChoice.AUTO) }
@@ -181,7 +183,7 @@ fun CameraCaptureScreen(
     val waitingStatus = stringResource(R.string.camera_status_starting)
 
     SideEffect {
-        onShutterAvailabilityChanged(permissionsGranted && cameraSession != null)
+        onShutterAvailabilityChanged(permissionsGranted && cameraSession != null && cameraError == null && visualEffectError == null)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -201,7 +203,7 @@ fun CameraCaptureScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(previewView, permissionsGranted, lensFacing, lifecycleOwner) {
+    LaunchedEffect(previewView, permissionsGranted, lensFacing, lifecycleOwner, retryCamera) {
         val view = previewView
         if (view == null || !permissionsGranted) {
             cameraSession = null
@@ -214,6 +216,7 @@ fun CameraCaptureScreen(
         }
         cameraSession = null
         cameraError = null
+        visualEffectError = null
 
         try {
             val provider = ProcessCameraProvider.getInstance(context).await(ContextCompat.getMainExecutor(context))
@@ -248,7 +251,11 @@ fun CameraCaptureScreen(
                 )
                 .setTargetRotation(view.display?.rotation ?: Surface.ROTATION_0)
                 .build()
-            val effect = FilmPreviewEffect(recipe, includeVideoTarget = false)
+            val effect = FilmPreviewEffect(recipe, includeVideoTarget = false) { _ ->
+                ContextCompat.getMainExecutor(context).execute {
+                    visualEffectError = context.getString(R.string.camera_visual_effect_failed)
+                }
+            }
             val group = androidx.camera.core.UseCaseGroup.Builder()
                 .addUseCase(preview)
                 .addUseCase(imageCapture)
@@ -425,17 +432,16 @@ fun CameraCaptureScreen(
                         onOpenSettings = { context.openApplicationSettings() },
                         modifier = Modifier.align(Alignment.Center),
                     )
-                } else if (cameraError != null) {
-                    Text(
-                        text = cameraError.orEmpty(),
-                        color = CameraIvory,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(28.dp)
-                            .background(CameraDeepSky.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
-                            .padding(20.dp),
-                    )
+                } else if (cameraError != null || visualEffectError != null) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center).padding(28.dp)
+                            .background(CameraDeepSky.copy(alpha = 0.9f), RoundedCornerShape(16.dp)).padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(cameraError ?: visualEffectError.orEmpty(), color = CameraIvory, textAlign = TextAlign.Center)
+                        TextButton(onClick = { retryCamera++ }) { Text(stringResource(R.string.camera_retry)) }
+                    }
                 } else if (cameraSession == null) {
                     Text(waitingStatus, color = CameraIvory, modifier = Modifier.align(Alignment.Center))
                 }
@@ -554,7 +560,7 @@ fun CameraCaptureScreen(
                                 lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
                                 captureMessage = null
                             },
-                            enabled = cameraSession != null && !captureInProgress,
+                            enabled = cameraSession != null && cameraError == null && visualEffectError == null && !captureInProgress,
                             modifier = Modifier.semantics {
                                 contentDescription = switchCameraDescription
                                 stateDescription = switchStateDescription
@@ -566,7 +572,7 @@ fun CameraCaptureScreen(
 
                     IconButton(
                         onClick = { triggerShutter() },
-                        enabled = permissionsGranted && cameraSession != null && !captureInProgress && timerCountdown == 0,
+                        enabled = permissionsGranted && cameraSession != null && cameraError == null && visualEffectError == null && !captureInProgress && timerCountdown == 0,
                         modifier = Modifier
                             .size(76.dp)
                             .background(CameraGold, CircleShape)

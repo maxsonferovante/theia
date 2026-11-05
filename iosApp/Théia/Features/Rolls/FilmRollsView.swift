@@ -1,6 +1,7 @@
 import Foundation
 import Photos
 import SwiftUI
+import TheiaShared
 
 enum NativeFilmRollCapacity: Int, Codable, CaseIterable, Identifiable {
     case exposures24 = 24
@@ -19,12 +20,58 @@ struct NativeFilmRoll: Codable, Identifiable, Hashable, Sendable {
     var instantDevelopedIDs: Set<String> = []
     var developedAt: Date?
 
-    var remainingExposures: Int { max(0, capacity.rawValue - captureIDs.count) }
-    var isFull: Bool { captureIDs.count == capacity.rawValue }
+    private var domainCapacity: TheiaShared.FilmRollCapacity {
+        capacity == .exposures24 ? .exposures24 : .exposures36
+    }
+
+    private var domainRoll: TheiaShared.FilmRoll {
+        TheiaShared.FilmRoll(
+            id: id,
+            capacity: domainCapacity,
+            createdAtEpochMillis: Int64(createdAt.timeIntervalSince1970 * 1_000),
+            photoIds: captureIDs,
+            developedAtEpochMillis: nil
+        )
+    }
+
+    var remainingExposures: Int { max(0, Int(domainRoll.capacity.exposures) - captureIDs.count) }
+    var isFull: Bool { captureIDs.count == Int(domainRoll.capacity.exposures) }
     var canCapture: Bool { developedAt == nil && !isFull }
     var isDeveloped: Bool { developedAt != nil }
     var visibleCaptureIDs: Set<String> {
         isDeveloped ? Set(captureIDs) : instantDevelopedIDs
+    }
+
+    func recording(_ captureID: String) throws -> NativeFilmRoll {
+        guard developedAt == nil else { throw NativeFilmRollError.closedOrFull }
+        let updated = try domainRoll.recordPhoto(photoId: captureID)
+        return copy(captureIDs: updated.photoIds.compactMap { $0 as? String })
+    }
+
+    func developing(at date: Date) throws -> NativeFilmRoll {
+        guard developedAt == nil else { throw NativeFilmRollError.closedOrFull }
+        let updated = try domainRoll.develop(atEpochMillis: Int64(date.timeIntervalSince1970 * 1_000))
+        return copy(
+            captureIDs: updated.photoIds.compactMap { $0 as? String },
+            instantDevelopedIDs: instantDevelopedIDs.union(captureIDs),
+            developedAt: date
+        )
+    }
+
+    private func copy(
+        captureIDs: [String],
+        instantDevelopedIDs: Set<String>? = nil,
+        developedAt: Date? = nil
+    ) -> NativeFilmRoll {
+        NativeFilmRoll(
+            id: id,
+            capacity: capacity,
+            createdAt: createdAt,
+            recipe: recipe,
+            captureIDs: captureIDs,
+            instantDevelopedIDs: instantDevelopedIDs ?? self.instantDevelopedIDs,
+            developedAt: developedAt ?? self.developedAt
+        )
     }
 }
 
@@ -64,9 +111,8 @@ actor JSONNativeFilmRollRepository: NativeFilmRollRepository {
     func appendCapture(_ captureID: String, to rollID: String) async throws -> NativeFilmRoll {
         var rolls = try await allRolls()
         guard let index = rolls.firstIndex(where: { $0.id == rollID }) else { throw NativeFilmRollError.notFound }
-        guard rolls[index].canCapture else { throw NativeFilmRollError.closedOrFull }
-        guard !rolls[index].captureIDs.contains(captureID) else { throw NativeFilmRollError.duplicateCapture }
-        rolls[index].captureIDs.append(captureID)
+        let updated = try rolls[index].recording(captureID)
+        rolls[index] = updated
         try persist(rolls)
         return rolls[index]
     }
@@ -84,8 +130,7 @@ actor JSONNativeFilmRollRepository: NativeFilmRollRepository {
         guard let index = rolls.firstIndex(where: { $0.id == rollID }) else { throw NativeFilmRollError.notFound }
         guard !rolls[index].isDeveloped else { return rolls[index] }
         guard allowEarly || rolls[index].isFull else { throw NativeFilmRollError.notFull }
-        rolls[index].instantDevelopedIDs.formUnion(rolls[index].captureIDs)
-        rolls[index].developedAt = date
+        rolls[index] = try rolls[index].developing(at: date)
         try persist(rolls)
         return rolls[index]
     }

@@ -38,5 +38,7 @@ Automated checks cover domain integrity and native compilation. Physical-device 
 - A 12-second Perfetto trace was captured, but it has not been analyzed or attached as a reviewed trace.
 - A still photo saved to the system gallery and its roll record persisted in Théia after the CameraX MediaStore flow was corrected.
 - The synthetic ADB volume-key event opened the system volume panel, so physical-button shutter behavior still needs verification with a real device-button press. iOS capture-event behavior also has only build evidence so far.
+- The latest debug APK, including the preview retry/error reporting changes, was installed and launched on the same device on 2026-11-04. This was a launch smoke check, not a full capture or performance rerun.
+- `connectedDebugAndroidTest` was attempted on the connected device, but all five Compose UI tests failed before assertions with `IllegalStateException: No compose hierarchies found in the app`. Treat the UI automation result as an unresolved test harness failure, not a passing flow check.
 
-The multi-device performance target, trace analysis, capture interruption/storage recovery, and hardware-button verification remain open.
+The multi-device performance target, trace analysis, capture interruption/storage recovery, hardware-button verification, and Android Compose UI test harness remain open.

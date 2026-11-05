@@ -124,6 +124,8 @@ fun VideoCaptureScreen(
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var session by remember { mutableStateOf<VideoCameraSession?>(null) }
     var cameraError by remember { mutableStateOf<String?>(null) }
+    var visualEffectError by remember { mutableStateOf<String?>(null) }
+    var retryCamera by remember { mutableIntStateOf(0) }
     var activeRecording by remember { mutableStateOf<Recording?>(null) }
     var recordedMillis by remember { mutableLongStateOf(0L) }
     var captureMessage by remember { mutableStateOf<String?>(null) }
@@ -154,7 +156,7 @@ fun VideoCaptureScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(previewView, cameraGranted, lensFacing, lifecycleOwner, recipe, selectedVideoStyleId) {
+    LaunchedEffect(previewView, cameraGranted, lensFacing, lifecycleOwner, recipe, selectedVideoStyleId, retryCamera) {
         val view = previewView
         if (view == null || !cameraGranted) {
             session = null
@@ -166,6 +168,7 @@ fun VideoCaptureScreen(
         }
         session = null
         cameraError = null
+        visualEffectError = null
         try {
             val provider = ProcessCameraProvider.getInstance(context).await(ContextCompat.getMainExecutor(context))
             val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
@@ -180,6 +183,11 @@ fun VideoCaptureScreen(
                     recipe,
                     includeVideoTarget = true,
                     videoStyleId = selectedVideoStyleId,
+                    onProcessingError = { _ ->
+                        ContextCompat.getMainExecutor(context).execute {
+                            visualEffectError = context.getString(R.string.video_visual_effect_failed)
+                        }
+                    },
                 )
                 val group = androidx.camera.core.UseCaseGroup.Builder()
                     .addUseCase(preview)
@@ -278,7 +286,16 @@ fun VideoCaptureScreen(
                         onOpenSettings = { context.openApplicationSettings() },
                         modifier = Modifier.align(Alignment.Center),
                     )
-                    cameraError != null -> Text(cameraError.orEmpty(), color = VideoIvory, textAlign = TextAlign.Center, modifier = Modifier.align(Alignment.Center).padding(24.dp))
+                    cameraError != null || visualEffectError != null -> Column(
+                        Modifier.align(Alignment.Center).padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(cameraError ?: visualEffectError.orEmpty(), color = VideoIvory, textAlign = TextAlign.Center)
+                        TextButton(onClick = { retryCamera++ }, enabled = activeRecording == null) {
+                            Text(stringResource(R.string.video_retry_camera))
+                        }
+                    }
                     session == null -> Text(stringResource(R.string.video_camera_starting), color = VideoIvory, modifier = Modifier.align(Alignment.Center))
                 }
 
@@ -356,7 +373,7 @@ fun VideoCaptureScreen(
                         TextButton(onClick = onBack) { Text(stringResource(R.string.video_back)) }
                     }
                     Button(
-                        enabled = session != null,
+                        enabled = session != null && cameraError == null && visualEffectError == null,
                         onClick = {
                             val current = session ?: return@Button
                             captureMessage = null

@@ -6,6 +6,8 @@
     <string name="camera_request_permission">Allow camera</string>
     <string name="camera_unavailable">No usable camera is available on this device.</string>
     <string name="camera_initialization_failed">The camera could not be started.</string>
+    <string name="camera_visual_effect_failed">The live visual effect stopped. Retry the camera before capturing.</string>
+    <string name="camera_retry">Retry camera</string>
     <string name="camera_gallery_unavailable">The photo library could not save this image.</string>
     <string name="camera_photo_saved">Original photo saved to your photo library.</string>
     <string name="camera_capture_failed">The photo could not be captured.</string>

@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var latestCapture: NativeCaptureRecord?
     @State private var latestPhotoVisible = true
     @State private var hasOpenedDefaultCamera = false
+    @State private var rollPersistenceFailed = false
     private let albumRepository = JSONAlbumMetadataRepository()
     private let geotagRepository = JSONLocalGeotagMetadataRepository()
     private let filmRollRepository = JSONNativeFilmRollRepository()
@@ -27,14 +28,14 @@ struct ContentView: View {
                     TheiaPalette.deepSky.ignoresSafeArea()
                     VStack(spacing: 24) {
                         Text("Θ")
-                            .font(.system(size: 76, weight: .light, design: .serif))
+                            .font(.system(.largeTitle, design: .serif).weight(.light))
                             .foregroundStyle(TheiaPalette.solarGold)
                             .accessibilityHidden(true)
                         Text("Théia")
-                            .font(.system(size: 38, weight: .medium, design: .serif))
+                            .font(.system(.largeTitle, design: .serif).weight(.medium))
                             .foregroundStyle(TheiaPalette.ivory)
                         Text("ios_development_build")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
                             .tracking(2)
                             .foregroundStyle(TheiaPalette.solarGold)
                         Text("ios_build_description")
@@ -149,6 +150,11 @@ struct ContentView: View {
             guard isShown else { return }
             Task { await refreshLatestPhotoVisibility() }
         }
+        .alert("roll_error_title", isPresented: $rollPersistenceFailed) {
+            Button("capture_ok", role: .cancel) { }
+        } message: {
+            Text("roll_capture_persistence_error")
+        }
     }
 
     private func persistInAlbum(_ record: NativeCaptureRecord, rollID: String? = nil) {
@@ -225,7 +231,8 @@ struct ContentView: View {
                     latestPhotoVisible = true
                 }
             } catch {
-                // Keep the original in Photos even if local roll metadata or development fails.
+                // The original is already safe in Photos; surface the local association failure.
+                rollPersistenceFailed = true
             }
         }
     }

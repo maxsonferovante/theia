@@ -11,7 +11,9 @@ final class NativeFilmVideoFrameProcessor: NSObject, AVCaptureVideoDataOutputSam
     private let context = CIContext(options: [.cacheIntermediates: false])
     private var parameters: NativeResolvedVisualParameters?
     private var lastPreviewTime: CFTimeInterval = 0
-    private let minimumPreviewInterval: CFTimeInterval = 1.0 / 15.0
+    // Match the capture target. AVCaptureVideoDataOutput discards late frames,
+    // so a slow renderer cannot build an unbounded queue.
+    private let minimumPreviewInterval: CFTimeInterval = 1.0 / 30.0
 
     func configure(parameters: NativeResolvedVisualParameters?) {
         self.parameters = parameters

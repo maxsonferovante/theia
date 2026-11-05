@@ -120,7 +120,9 @@ struct VideoCaptureView: View {
                 Text(String(format: NSLocalizedString("video_duration_format", comment: "Elapsed video duration"), recorder.elapsedSeconds))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.84))
-                Text(String(format: NSLocalizedString("video_quality_format", comment: "Selected video quality"), recorder.framesPerSecond))
+                Text(recorder.framesPerSecond > 0
+                     ? String(format: NSLocalizedString("video_quality_format", comment: "Selected video quality"), recorder.framesPerSecond)
+                     : NSLocalizedString("video_quality_device_default", comment: "The device-selected video frame rate"))
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.84))
             }
@@ -366,8 +368,8 @@ private final class VideoCaptureModel: ObservableObject {
                 Task { @MainActor in self?.present(NSLocalizedString("video_camera_unavailable", comment: "No compatible camera error"), settings: false) }
                 return
             }
-            let frameRate = Self.configureFrameRate(device)
             resources.session.addInput(input)
+            let frameRate = Self.configureFrameRate(device)
             resources.session.addOutput(resources.movieOutput)
             resources.session.addOutput(resources.videoDataOutput)
             if let connection = resources.videoDataOutput.connection(with: .video), connection.isVideoOrientationSupported {
@@ -390,17 +392,26 @@ private final class VideoCaptureModel: ObservableObject {
     }
 
     private nonisolated static func configureFrameRate(_ device: AVCaptureDevice) -> (framesPerSecond: Int, usedFallback: Bool) {
-        guard let range = device.activeFormat.videoSupportedFrameRateRanges.first(where: { $0.minFrameRate <= 30 && $0.maxFrameRate >= 30 }) else {
-            let supported = device.activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
-            return (max(1, Int(supported)), false)
+        let ranges = device.activeFormat.videoSupportedFrameRateRanges
+        let supportedRates = ranges.flatMap { range -> [Int] in
+            let upperBound = min(30, Int(floor(range.maxFrameRate)))
+            let lowerBound = Int(ceil(range.minFrameRate))
+            guard lowerBound <= upperBound else { return [] }
+            return Array(lowerBound...upperBound)
         }
+        guard let target = supportedRates.max() else { return (0, true) }
+
         do {
             try device.lockForConfiguration()
-            device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 30)
-            device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 30)
-            device.unlockForConfiguration()
-            return (Int(range.maxFrameRate >= 30 ? 30 : range.maxFrameRate), false)
-        } catch { return (Int(range.maxFrameRate), true) }
+            defer { device.unlockForConfiguration() }
+            let frameDuration = CMTime(value: 1, timescale: CMTimeScale(target))
+            device.activeVideoMinFrameDuration = frameDuration
+            device.activeVideoMaxFrameDuration = frameDuration
+            return (target, target != 30)
+        } catch {
+            // Do not report a rate that the device did not accept.
+            return (0, true)
+        }
     }
 
     private func installAudioInput() async {

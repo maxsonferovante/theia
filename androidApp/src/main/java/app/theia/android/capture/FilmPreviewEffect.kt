@@ -27,14 +27,18 @@ class FilmPreviewEffect(
     recipe: CaptureRecipe,
     includeVideoTarget: Boolean,
     videoStyleId: String = BuiltInVideoStyles.EQUIPMENT_RECIPE_ID,
+    onProcessingError: (Throwable) -> Unit = {},
 ) : CameraEffect(
     PREVIEW or if (includeVideoTarget) VIDEO_CAPTURE else 0,
     TRANSFORMATION_CAMERA_AND_SURFACE_ROTATION,
     OUTPUT_OPTION_ONE_FOR_EACH_TARGET,
     Executor { it.run() },
-    FilmSurfaceProcessor(requireNotNull(BuiltInVideoStyles.resolve(recipe, videoStyleId)) {
-        "No video visual profile exists for this recipe and style"
-    }),
+    FilmSurfaceProcessor(
+        requireNotNull(BuiltInVideoStyles.resolve(recipe, videoStyleId)) {
+            "No video visual profile exists for this recipe and style"
+        },
+        onProcessingError,
+    ),
     androidx.core.util.Consumer { },
 ) {
     private val processor = getSurfaceProcessor() as FilmSurfaceProcessor
@@ -43,7 +47,10 @@ class FilmPreviewEffect(
 }
 
 /** Minimal EGL2 processor: camera OES texture in, graded texture to each CameraX output. */
-private class FilmSurfaceProcessor(private val profile: ResolvedVisualParameters) : SurfaceProcessor {
+private class FilmSurfaceProcessor(
+    private val profile: ResolvedVisualParameters,
+    private val onProcessingError: (Throwable) -> Unit,
+) : SurfaceProcessor {
     private val thread = HandlerThread("theia-film-surface").apply { start() }
     private val handler = Handler(thread.looper)
     private val executor = Executor { command -> handler.post(command) }
@@ -58,7 +65,7 @@ private class FilmSurfaceProcessor(private val profile: ResolvedVisualParameters
     private var cameraSurfaceTexture: SurfaceTexture? = null
     private var cameraInputSurface: Surface? = null
     private var size = Size(0, 0)
-    private var errorListener: ((Throwable) -> Unit)? = null
+    private val errorReported = AtomicBoolean(false)
 
     override fun onInputSurface(request: SurfaceRequest) {
         handler.post {
@@ -99,7 +106,7 @@ private class FilmSurfaceProcessor(private val profile: ResolvedVisualParameters
                 }
             } catch (failure: Throwable) {
                 request.willNotProvideSurface()
-                errorListener?.invoke(failure)
+                reportProcessingError(failure)
             }
         }
     }
@@ -128,7 +135,7 @@ private class FilmSurfaceProcessor(private val profile: ResolvedVisualParameters
                 outputs += OutputTarget(surfaceOutput, surface, eglSurface)
             } catch (failure: Throwable) {
                 surfaceOutput.close()
-                errorListener?.invoke(failure)
+                reportProcessingError(failure)
             }
         }
     }
@@ -186,8 +193,12 @@ private class FilmSurfaceProcessor(private val profile: ResolvedVisualParameters
                 check(EGL14.eglSwapBuffers(eglDisplay, output.eglSurface)) { "CameraX EGL frame swap failed" }
             }
         } catch (failure: Throwable) {
-            errorListener?.invoke(failure)
+            reportProcessingError(failure)
         }
+    }
+
+    private fun reportProcessingError(failure: Throwable) {
+        if (errorReported.compareAndSet(false, true)) onProcessingError(failure)
     }
 
     private fun bindProfileUniforms(outputSize: Size) {

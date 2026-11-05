@@ -307,6 +307,7 @@
 "video_audio_accessibility" = "Gravar áudio do vídeo";
 "video_duration_format" = "%ds / 60s";
 "video_quality_format" = "1080p · %d fps";
+"video_quality_device_default" = "Taxa de quadros padrão do dispositivo";
 "video_start" = "Iniciar gravação de vídeo";
 "video_stop" = "Parar gravação de vídeo";
 "video_camera_permission_denied" = "Permita o acesso à câmera nos Ajustes para gravar um vídeo.";
@@ -399,6 +400,7 @@
 "roll_capture_hint" = "Usa a receita fixa de câmera, lente e filme deste rolo.";
 "roll_done" = "Concluído";
 "roll_error_title" = "Erro no rolo";
+"roll_capture_persistence_error" = "O original está salvo no Fotos, mas o Théia não conseguiu salvar os dados do rolo. Abra Rolos para revisar o rolo atual.";
 "roll_error_not_found" = "Este rolo não existe mais.";
 "roll_error_closed" = "Este rolo foi revelado ou não tem exposições disponíveis.";
 "roll_error_duplicate" = "Esta foto já está atribuída ao rolo.";

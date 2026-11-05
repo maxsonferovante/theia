@@ -11,6 +11,8 @@
     <string name="video_allow_camera">Allow camera</string>
     <string name="video_camera_unavailable">No usable camera is available on this device.</string>
     <string name="video_camera_start_failed">The camera could not be started.</string>
+    <string name="video_visual_effect_failed">The live visual effect stopped. Retry the camera before recording.</string>
+    <string name="video_retry_camera">Retry camera</string>
     <string name="video_include_audio">Include audio (off by default)</string>
     <string name="video_microphone_denied">Microphone access was not granted. Video will remain silent.</string>
     <string name="video_start">Start recording</string>

@@ -32,6 +32,7 @@ data class FilmRoll(
         }
     }
 
+    @Throws(IllegalArgumentException::class)
     fun recordPhoto(photoId: PhotoAssetId): FilmRoll {
         require(developedAtEpochMillis == null) { "A developed roll cannot accept new photos" }
         require(photoId !in photoIds) { "A photo can consume only one roll exposure" }
@@ -39,6 +40,7 @@ data class FilmRoll(
         return copy(photoIds = photoIds + photoId)
     }
 
+    @Throws(IllegalArgumentException::class)
     fun develop(atEpochMillis: Long): FilmRoll {
         require(developedAtEpochMillis == null) { "Film roll has already been developed" }
         require(atEpochMillis >= createdAtEpochMillis) { "Development time cannot precede roll creation" }
