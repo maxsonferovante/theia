@@ -21,6 +21,8 @@ func embeddingRecipeMetadata(
         "body": recipe.cameraBodyID,
         "lens": recipe.lensID,
         "film": recipe.filmStockID,
+        "filter_applied": false,
+        "filter_status": "original_unfiltered",
     ]
     guard let encoded = try? JSONSerialization.data(withJSONObject: compactRecipe),
           let json = String(data: encoded, encoding: .utf8) else { return data }

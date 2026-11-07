@@ -20,6 +20,8 @@ fun writeRecipeMetadata(contentResolver: ContentResolver, photoUri: Uri, recipe:
                     .put("body", recipe.bodyId.value)
                     .put("lens", recipe.lensId.value)
                     .put("film", recipe.filmStockId.value)
+                    .put("filter_applied", false)
+                    .put("filter_status", "original_unfiltered")
                     .toString(),
             )
             exif.saveAttributes()

@@ -51,7 +51,7 @@ Ports use common Kotlin values and opaque string handles. Android and iOS adapte
 
 Original stills are saved to the system photo library at capture time so uninstalling Théia does not remove them. Local album metadata remains app-private and is separate from the gallery originals. Geotagging defaults to off; camera, microphone, photo-library, and location permissions are requested in the feature flow that needs them. The application has no account, required server, advertising, or analytics dependency.
 
-Théia keeps undeveloped photos out of its album view until the roll is developed; the originals remain in the system gallery. Development writes a separate rendered asset. Video audio is opt-in. Saved recipe metadata is compact and best-effort because gallery apps and sharing flows may strip it. Android disables app backup, and iOS excludes local metadata files from backup.
+Théia keeps undeveloped photos out of its album view until the roll is developed; the originals remain in the system gallery. Development writes a separate rendered asset. Original-photo EXIF marks `filter_applied: false` and `filter_status: original_unfiltered`; a successfully rendered developed JPEG records `filter_applied: true`, `filter_applied_by: theia`, and the film-profile ID and version. These fields describe which file received the rendering. Video audio is opt-in. Saved recipe metadata is compact and best-effort because gallery apps and sharing flows may strip it. Android disables app backup, and iOS excludes local metadata files from backup.
 
 ## Build and Verification
 

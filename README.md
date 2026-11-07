@@ -25,6 +25,29 @@ The apps and shared domain compile, and the shared domain tests pass. Physical-d
 
 Use the checked-in Gradle wrapper, JDK 17, and Android SDK:
 
+To build an installable debug APK for Android 14, 15 and 16 (including the Redmi Note 13 5G), run:
+
+```sh
+./scripts/build-android-apk.sh
+```
+
+The build requires a compatible JDK and the Android SDK platform configured in the project (`compileSdk` 37). Set `ANDROID_HOME` or `sdk.dir` in `local.properties` if the SDK is not in its standard macOS or Linux location. The APK is signed with the debug key and is intended for testing, not distribution. Device-specific camera behavior still requires physical-device testing.
+
+For a signed release APK, create or use an existing release keystore, then configure its path, alias and passwords in the environment:
+
+```sh
+export THEIA_RELEASE_STORE_FILE="/absolute/path/to/theia-release.jks"
+export THEIA_RELEASE_KEY_ALIAS="theia"
+read -rs THEIA_RELEASE_STORE_PASSWORD; export THEIA_RELEASE_STORE_PASSWORD; echo
+read -rs THEIA_RELEASE_KEY_PASSWORD; export THEIA_RELEASE_KEY_PASSWORD; echo
+./scripts/build-android-release.sh
+unset THEIA_RELEASE_STORE_PASSWORD THEIA_RELEASE_KEY_PASSWORD
+```
+
+The output is `androidApp/build/outputs/apk/release/androidApp-release.apk`. To create a keystore when you do not already have one, run `keytool -genkeypair -v -keystore /secure/path/theia-release.jks -alias theia -keyalg RSA -keysize 4096 -validity 10000` and follow the prompts. Keep the keystore and passwords safe: future updates must use the same signing identity. A release APK cannot update an existing debug installation signed with a different key.
+
+For the shared tests and Android build:
+
 ```sh
 ./gradlew :shared:testAndroidHostTest :androidApp:compileDebugKotlin :androidApp:assembleDebug
 ```

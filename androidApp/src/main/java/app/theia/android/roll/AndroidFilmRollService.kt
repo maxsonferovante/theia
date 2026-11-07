@@ -34,6 +34,7 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.math.pow
 import kotlin.math.sqrt
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -212,7 +213,16 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
         val exif = ExifInterface(output.absolutePath)
         exif.setAttribute(
             ExifInterface.TAG_USER_COMMENT,
-            "{\"version\":1,\"recipe\":\"${recipe.id.value}\",\"filmProfile\":\"${visual.filmProfileId}\",\"profileVersion\":${visual.filmProfileVersion}}",
+            JSONObject()
+                .put("version", 1)
+                .put("recipe", recipe.id.value)
+                .put("filmProfile", visual.filmProfileId)
+                .put("profileVersion", visual.filmProfileVersion)
+                .put("filter_applied", true)
+                .put("filter_applied_by", "theia")
+                .put("filter_profile_id", visual.filmProfileId)
+                .put("filter_profile_version", visual.filmProfileVersion)
+                .toString(),
         )
         exif.saveAttributes()
         DevelopedPhoto(output.absolutePath)

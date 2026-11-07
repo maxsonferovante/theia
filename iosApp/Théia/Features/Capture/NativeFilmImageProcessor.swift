@@ -497,6 +497,8 @@ enum NativeFilmImageProcessor {
             "film_id": metadata.filmStockID,
             "film_profile_id": metadata.filmProfileID,
             "film_profile_version": metadata.filmProfileVersion,
+            "filter_applied": true,
+            "filter_applied_by": "theia",
         ]
         let encodedMetadata = try JSONSerialization.data(withJSONObject: encoderMetadata, options: [.sortedKeys])
         guard let metadataString = String(data: encodedMetadata, encoding: .utf8) else {
