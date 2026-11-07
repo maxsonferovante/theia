@@ -43,12 +43,19 @@ class FilmPreviewEffect(
 ) {
     private val processor = getSurfaceProcessor() as FilmSurfaceProcessor
 
+    fun updateRecipe(recipe: CaptureRecipe, videoStyleId: String = BuiltInVideoStyles.EQUIPMENT_RECIPE_ID) {
+        val profile = requireNotNull(BuiltInVideoStyles.resolve(recipe, videoStyleId)) {
+            "No video visual profile exists for this recipe and style"
+        }
+        processor.updateProfile(profile)
+    }
+
     fun release() = processor.release()
 }
 
 /** Minimal EGL2 processor: camera OES texture in, graded texture to each CameraX output. */
 private class FilmSurfaceProcessor(
-    private val profile: ResolvedVisualParameters,
+    private var profile: ResolvedVisualParameters,
     private val onProcessingError: (Throwable) -> Unit,
 ) : SurfaceProcessor {
     private val thread = HandlerThread("theia-film-surface").apply { start() }
@@ -71,6 +78,12 @@ private class FilmSurfaceProcessor(
     private val transformedMatrix = FloatArray(16)
     private val fullscreenVertexBuffer = buffer(FULLSCREEN_VERTICES)
     private val textureCoordinateBuffer = buffer(TEXTURE_COORDS)
+
+    fun updateProfile(profile: ResolvedVisualParameters) {
+        handler.post {
+            if (!released.get()) this.profile = profile
+        }
+    }
 
     override fun onInputSurface(request: SurfaceRequest) {
         handler.post {

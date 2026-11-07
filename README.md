@@ -4,7 +4,7 @@ Théia is a digital analog camera for iOS and Android. A camera body, lens, and 
 
 ## Status
 
-The repository contains a Kotlin Multiplatform domain and native Android/iOS applications. It includes a selectable Workbench, still and short-video capture, film rolls and development, a local Album/Lab, optional geotags, onboarding, and privacy/accessibility settings. Photos and videos are saved to the system library as originals; development produces separate rendered copies. English and Brazilian Portuguese are supported.
+The repository contains a Kotlin Multiplatform domain and native Android/iOS applications. Android now opens into a camera-first flow with an in-context recipe sheet, Photo/Video modes, film rolls and development, a local Album/Lab, optional geotags, onboarding, and privacy/accessibility settings. Photos and videos are saved to the system library as originals; development produces separate rendered copies. English and Brazilian Portuguese are supported.
 
 The apps and shared domain compile, and the shared domain tests pass. Physical-device performance measurements and complete capture-flow validation on both platforms are still release-validation work; see `docs/performance-validation.md`.
 
@@ -13,6 +13,9 @@ The apps and shared domain compile, and the shared domain tests pass. Physical-d
 - Rationale for the name: `docs/rationale-for-the-name-theia.docx`
 - Product specification: `docs/theia-product-spec.md`
 - Architecture: `docs/architecture.md`
+- Interface redesign decisions and journeys: `docs/interface-redesign.md`
+- Camera-first navigation decision: `docs/adr/0001-camera-first-interface.md`
+- Android interface captures from the Motorola Edge 60, including the compact horizon indicator and its expanded values: [`docs/screenshots/android/README.md`](docs/screenshots/android/README.md)
 - Catalog authoring: `docs/catalog-authoring.md`
 - Performance validation: `docs/performance-validation.md`
 - Contribution guide: `CONTRIBUTING.md`

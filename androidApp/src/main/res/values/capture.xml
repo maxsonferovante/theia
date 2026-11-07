@@ -43,5 +43,9 @@
     <string name="camera_roll_remaining">%1$d exposures remaining</string>
     <string name="camera_horizon_level">Three-axis horizon level</string>
     <string name="camera_horizon_axes">Yaw %1$s°, pitch %2$s°, roll %3$s°</string>
+    <string name="camera_horizon_values_shown">Values shown</string>
+    <string name="camera_horizon_values_hidden">Values hidden</string>
+    <string name="camera_horizon_show_values">Show level values</string>
+    <string name="camera_horizon_hide_values">Hide level values</string>
     <string name="camera_horizon_unavailable">Level sensor unavailable</string>
 </resources>

@@ -22,4 +22,23 @@
     <string name="open_video">Gravar vídeo</string>
     <string name="open_settings">Configurações</string>
     <string name="latest_original_saved">Original salvo: %1$s</string>
+    <string name="recipe_sheet_title">Sua receita</string>
+    <string name="recipe_sheet_description">Escolha um corpo, uma lente e um filme. A alteração vale depois de aplicar.</string>
+    <string name="recipe_sheet_current_label">RECEITA ATUAL</string>
+    <string name="recipe_sheet_open_accessibility">Editar receita. Corpo: %1$s, lente: %2$s, filme: %3$s</string>
+    <string name="recipe_sheet_summary">%1$s · %2$s · %3$s</string>
+    <string name="recipe_sheet_apply">Aplicar receita</string>
+    <string name="recipe_sheet_cancel">Cancelar</string>
+    <string name="recipe_roll_switch_title">Começar outro rolo?</string>
+    <string name="recipe_roll_switch_message">O rolo atual tem %1$s. Ele continuará aberto para você retomá-lo depois. A nova receita inicia outro rolo.</string>
+    <string name="recipe_roll_switch_confirm">Começar novo rolo</string>
+    <string name="recipe_roll_switch_cancel">Manter receita atual</string>
+    <string name="camera_mode_photo">Foto</string>
+    <string name="camera_mode_video">Vídeo</string>
+    <string name="camera_controls_show">Controles da câmera</string>
+    <string name="camera_controls_hide">Ocultar controles</string>
+    <plurals name="recipe_roll_switch_exposure_count">
+        <item quantity="one">%d exposição</item>
+        <item quantity="other">%d exposições</item>
+    </plurals>
 </resources>
