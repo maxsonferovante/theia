@@ -11,7 +11,10 @@ import app.theia.domain.model.ResolvedVisualParameters
 
 /** Stable rendering profile data. Increment a profile's version when its rendering values change. */
 object BuiltInFilmVisualProfiles {
-    const val SCHEMA_VERSION = 1
+    const val RENDERING_ALGORITHM_ID = "theia.visual-pipeline"
+    const val RENDERING_SCHEMA_V1 = 1
+    const val SCHEMA_VERSION = RENDERING_SCHEMA_V1
+    private val supportedRenderingSchemaVersions = setOf(RENDERING_SCHEMA_V1)
 
     val films: List<FilmVisualProfile> = listOf(
         film("apricot-noon", 0.05, 1.02, 1.12, 0.34, 0.02, 0.40, 0.02, 0.18, 0.36, 0.10, 0.10, 0.08),
@@ -66,18 +69,24 @@ object BuiltInFilmVisualProfiles {
         LensVisualAdjustment(LensId("lens-tele"), edgeSoftness = 0.02, vignette = 0.02, distortion = 0.02, sharpness = 1.04),
         LensVisualAdjustment(LensId("lens-soft-focus"), edgeSoftness = 0.28, halation = 0.16, bloom = 0.18, sharpness = 0.78),
         LensVisualAdjustment(LensId("lens-tilt"), edgeSoftness = 0.12, vignette = 0.08, distortion = 0.04, sharpness = 0.92),
+        LensVisualAdjustment(LensId("lens-biscoito-32"), vignette = 0.28, distortion = 0.04, radialSoftness = 0.45, chromaticAberration = 0.002, opticalFlare = 0.16),
     )
 
     fun film(filmStockId: FilmStockId): FilmVisualProfile? = films.firstOrNull { it.filmStockId == filmStockId }
     fun cameraBody(id: CameraBodyId): CameraBodyVisualAdjustment? = cameraBodies.firstOrNull { it.cameraBodyId == id }
-    fun lens(id: LensId): LensVisualAdjustment? = lenses.firstOrNull { it.lensId == id }
+    fun lens(id: LensId, profileVersion: Int = 1): LensVisualAdjustment? =
+        lenses.firstOrNull { it.lensId == id && it.profileVersion == profileVersion }
+
+    /** Add new schema implementations without removing older schemas used by saved rolls. */
+    fun supportsRenderingSchemaVersion(version: Int): Boolean = version in supportedRenderingSchemaVersions
 
     fun resolve(recipe: CaptureRecipe): ResolvedVisualParameters? {
+        if (!supportsRenderingSchemaVersion(recipe.renderingSchemaVersion)) return null
         val film = film(recipe.filmStockId) ?: return null
         val body = cameraBody(recipe.bodyId) ?: return null
-        val lens = lens(recipe.lensId) ?: return null
+        val lens = lens(recipe.lensId, recipe.lensProfileVersion) ?: return null
         return ResolvedVisualParameters(
-            schemaVersion = SCHEMA_VERSION,
+            schemaVersion = recipe.renderingSchemaVersion,
             filmProfileId = film.profileId,
             filmProfileVersion = film.profileVersion,
             filmStockId = recipe.filmStockId,
@@ -98,6 +107,10 @@ object BuiltInFilmVisualProfiles {
             edgeSoftness = lens.edgeSoftness,
             distortion = lens.distortion,
             sharpness = lens.sharpness,
+            lensProfileVersion = lens.profileVersion,
+            radialSoftness = lens.radialSoftness,
+            chromaticAberration = lens.chromaticAberration,
+            opticalFlare = lens.opticalFlare,
         )
     }
 

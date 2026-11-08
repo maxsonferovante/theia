@@ -281,6 +281,10 @@ private final class VideoCaptureModel: ObservableObject {
 
     init() {
         frameProcessor.onPreviewFrame = { [weak self] image in self?.previewFrame = image }
+        frameProcessor.onProcessingError = { [weak self] in
+            self?.previewFrame = nil
+            self?.present(NativeFilmImageProcessorError.renderingFailed.localizedDescription, settings: false)
+        }
     }
 
     func prepareCameraPermissionState(recipe: NativeCaptureRecipe) {
@@ -691,8 +695,12 @@ private final class VideoCaptureModel: ObservableObject {
         let asset = AVURLAsset(url: sourceURL)
         let context = CIContext(options: [.cacheIntermediates: false])
         let composition = AVVideoComposition(asset: asset, applyingCIFiltersWithHandler: { request in
-            let filtered = NativeFilmImageProcessor.applyVisualProfile(to: request.sourceImage, parameters: parameters)
-            request.finish(with: filtered, context: context)
+            do {
+                let filtered = try NativeFilmImageProcessor.applyVisualProfile(to: request.sourceImage, parameters: parameters)
+                request.finish(with: filtered, context: context)
+            } catch {
+                request.finish(with: error)
+            }
         })
         guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
             throw VideoCaptureError.profileExportUnavailable
@@ -745,6 +753,9 @@ private final class VideoCaptureModel: ObservableObject {
             "id": recipe.stableID,
             "body": recipe.cameraBodyID,
             "lens": recipe.lensID,
+            "lens_profile_version": recipe.lensProfileVersion,
+            "rendering_algorithm_id": "theia.visual-pipeline",
+            "rendering_schema_version": recipe.renderingSchemaVersion,
             "film": recipe.filmStockID,
             "video_style": videoStyleID,
         ]

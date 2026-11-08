@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.media.ExifInterface
 import app.theia.domain.model.CaptureRecipe
+import app.theia.domain.catalog.BuiltInFilmVisualProfiles
 import org.json.JSONObject
 
 /** Writes a small, versioned recipe to JPEG EXIF when the provider supports updates. */
@@ -19,6 +20,9 @@ fun writeRecipeMetadata(contentResolver: ContentResolver, photoUri: Uri, recipe:
                     .put("recipe", recipe.id.value)
                     .put("body", recipe.bodyId.value)
                     .put("lens", recipe.lensId.value)
+                    .put("lens_profile_version", recipe.lensProfileVersion)
+                    .put("rendering_algorithm_id", BuiltInFilmVisualProfiles.RENDERING_ALGORITHM_ID)
+                    .put("rendering_schema_version", recipe.renderingSchemaVersion)
                     .put("film", recipe.filmStockId.value)
                     .put("filter_applied", false)
                     .put("filter_status", "original_unfiltered")

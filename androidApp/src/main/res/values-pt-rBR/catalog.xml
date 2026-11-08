@@ -42,6 +42,9 @@
     <string name="catalog_lens_tilt_name">Prism Tilt</string>
     <string name="catalog_lens_tilt_description">Uma lente de foco seletivo com plano estreito de nitidez e bordas suavemente desfocadas.</string>
     <string name="catalog_lens_tilt_visual">Lente Prism Tilt: Uma lente de foco seletivo com plano estreito de nitidez e bordas suavemente desfocadas. Barril facetado de bronze com janela de prisma violeta e marcas de inclinação.</string>
+    <string name="catalog_lens_biscoito_32_name">Biscoito 32</string>
+    <string name="catalog_lens_biscoito_32_description">Uma lente compacta com centro nítido, bordas suaves e vinheta nostálgica.</string>
+    <string name="catalog_lens_biscoito_32_visual">Biscoito 32: Lente circular fina e escura com anel creme e pequeno centro de vidro violeta.</string>
     <string name="catalog_film_apricot_noon_name">Apricot Noon</string>
     <string name="catalog_film_apricot_noon_description">Luzes âmbar quentes, céus claros e grão suave para sombras abertas.</string>
     <string name="catalog_film_apricot_noon_visual">Filme Apricot Noon: Luzes âmbar quentes, céus claros e grão suave para sombras abertas. Moldura pêssego-claro com sol do meio-dia irradiando e grão creme fino.</string>

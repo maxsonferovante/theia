@@ -12,6 +12,7 @@ import androidx.camera.core.CameraEffect
 import androidx.camera.core.SurfaceOutput
 import androidx.camera.core.SurfaceProcessor
 import androidx.camera.core.SurfaceRequest
+import app.theia.domain.catalog.BuiltInFilmVisualProfiles
 import app.theia.domain.catalog.BuiltInVideoStyles
 import app.theia.domain.model.CaptureRecipe
 import app.theia.domain.model.ResolvedVisualParameters
@@ -80,6 +81,9 @@ private class FilmSurfaceProcessor(
     private val textureCoordinateBuffer = buffer(TEXTURE_COORDS)
 
     fun updateProfile(profile: ResolvedVisualParameters) {
+        require(profile.schemaVersion == BuiltInFilmVisualProfiles.RENDERING_SCHEMA_V1) {
+            "Unsupported Android preview rendering schema ${profile.schemaVersion}"
+        }
         handler.post {
             if (!released.get()) this.profile = profile
         }
@@ -234,6 +238,9 @@ private class FilmSurfaceProcessor(
         float(programLocations.halation, profile.halation.toFloat())
         float(programLocations.edgeSoftness, profile.edgeSoftness.toFloat())
         float(programLocations.distortion, profile.distortion.toFloat())
+        float(programLocations.radialSoftness, profile.radialSoftness.toFloat())
+        float(programLocations.chromaticAberration, profile.chromaticAberration.toFloat())
+        float(programLocations.opticalFlare, profile.opticalFlare.toFloat())
         GLES20.glUniform2f(programLocations.resolution, outputSize.width.toFloat(), outputSize.height.toFloat())
     }
 
@@ -338,6 +345,9 @@ private class FilmSurfaceProcessor(
         val halation = GLES20.glGetUniformLocation(program, "uHalation")
         val edgeSoftness = GLES20.glGetUniformLocation(program, "uEdgeSoftness")
         val distortion = GLES20.glGetUniformLocation(program, "uDistortion")
+        val radialSoftness = GLES20.glGetUniformLocation(program, "uRadialSoftness")
+        val chromaticAberration = GLES20.glGetUniformLocation(program, "uChromaticAberration")
+        val opticalFlare = GLES20.glGetUniformLocation(program, "uOpticalFlare")
     }
 
     private fun fragmentShader() = """
@@ -349,15 +359,34 @@ private class FilmSurfaceProcessor(
         uniform float uExposure, uContrast, uSaturation, uWarmth, uGreenMagenta;
         uniform float uHighlightRollOff, uShadowLift, uGrain, uGrainScale;
         uniform float uVignette, uBloom, uHalation, uEdgeSoftness, uDistortion;
+        uniform float uRadialSoftness, uChromaticAberration, uOpticalFlare;
         varying vec2 vTexCoord;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        vec3 sampleCamera(vec2 uv) { return texture2D(uCamera, (uTexMatrix * vec4(uv, 0.0, 1.0)).xy).rgb; }
+        vec3 sampleCamera(vec2 uv) { return texture2D(uCamera, (uTexMatrix * vec4(clamp(uv, 0.0, 1.0), 0.0, 1.0)).xy).rgb; }
         void main() {
             vec2 centered = vTexCoord - 0.5;
             float radius2 = dot(centered, centered) * 4.0;
             vec2 uv = vTexCoord + centered * radius2 * uDistortion;
             vec2 pixel = 1.0 / max(uResolution, vec2(1.0));
             vec3 color = sampleCamera(uv);
+            if (uChromaticAberration > 0.0) {
+                vec2 fringe = centered * radius2 * uChromaticAberration;
+                color.r = sampleCamera(uv + fringe).r;
+                color.b = sampleCamera(uv - fringe).b;
+            }
+            if (uRadialSoftness > 0.0) {
+                vec2 blur = vec2(1.0 / uResolution.x, 1.0 / uResolution.y) *
+                    min(uResolution.x, uResolution.y) * 0.006 * uRadialSoftness * min(radius2, 1.0);
+                vec3 radial = (sampleCamera(uv + vec2(blur.x, 0.0)) + sampleCamera(uv - vec2(blur.x, 0.0)) +
+                               sampleCamera(uv + vec2(0.0, blur.y)) + sampleCamera(uv - vec2(0.0, blur.y))) * 0.25;
+                color = mix(color, radial, clamp(uRadialSoftness * radius2, 0.0, 0.65));
+            }
+            if (uOpticalFlare > 0.0) {
+                vec2 spread = vec2(1.0 / uResolution.x, 1.0 / uResolution.y) * min(uResolution.x, uResolution.y) * 0.015;
+                vec3 lights = (sampleCamera(uv + vec2(spread.x, 0.0)) + sampleCamera(uv - vec2(spread.x, 0.0)) +
+                               sampleCamera(uv + vec2(0.0, spread.y)) + sampleCamera(uv - vec2(0.0, spread.y))) * 0.25;
+                color += clamp((lights - 0.745) / 0.255, 0.0, 1.0) * uOpticalFlare * 0.098;
+            }
             vec3 soft = (sampleCamera(uv + vec2(pixel.x, 0.0)) + sampleCamera(uv - vec2(pixel.x, 0.0)) +
                          sampleCamera(uv + vec2(0.0, pixel.y)) + sampleCamera(uv - vec2(0.0, pixel.y))) * 0.25;
             color = mix(color, soft, clamp(uEdgeSoftness * 0.45, 0.0, 0.2));

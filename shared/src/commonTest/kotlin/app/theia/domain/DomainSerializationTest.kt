@@ -15,6 +15,7 @@ import kotlinx.serialization.builtins.serializer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class DomainSerializationTest {
     private val codec = VersionedJsonCodec()
@@ -46,6 +47,16 @@ class DomainSerializationTest {
         )
 
         assertEquals(recipe, codec.decode(CaptureRecipe.serializer(), codec.encode(recipe)))
+    }
+
+    @Test
+    fun olderRecipeWithoutVisualProfileVersionsDefaultsToVersionOne() {
+        val recipe = CaptureRecipe(CameraBodyId("body-01"), LensId("lens-02"), FilmStockId("film-03"))
+        val olderEncoding = codec.encode(CaptureRecipe.serializer(), recipe)
+            .replace(",\"lensProfileVersion\":1", "")
+            .replace(",\"renderingSchemaVersion\":1", "")
+        assertEquals(1, codec.decode(CaptureRecipe.serializer(), olderEncoding).lensProfileVersion)
+        assertEquals(1, codec.decode(CaptureRecipe.serializer(), olderEncoding).renderingSchemaVersion)
     }
 
     @Test

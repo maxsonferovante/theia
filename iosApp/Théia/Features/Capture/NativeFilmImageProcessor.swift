@@ -29,6 +29,10 @@ struct NativeResolvedVisualParameters: Equatable, Sendable {
     let edgeSoftness: Double
     let distortion: Double
     let sharpness: Double
+    let lensProfileVersion: Int
+    let radialSoftness: Double
+    let chromaticAberration: Double
+    let opticalFlare: Double
 
     init(
         schemaVersion: Int,
@@ -51,9 +55,13 @@ struct NativeResolvedVisualParameters: Equatable, Sendable {
         bloom: Double,
         edgeSoftness: Double,
         distortion: Double,
-        sharpness: Double
+        sharpness: Double,
+        lensProfileVersion: Int = 1,
+        radialSoftness: Double = 0,
+        chromaticAberration: Double = 0,
+        opticalFlare: Double = 0
     ) throws {
-        guard schemaVersion == 1, filmProfileVersion > 0, !filmProfileID.isEmpty,
+        guard schemaVersion > 0, filmProfileVersion > 0, !filmProfileID.isEmpty,
               !filmStockID.isEmpty, !cameraBodyID.isEmpty, !lensID.isEmpty else {
             throw NativeFilmImageProcessorError.unsupportedProfileVersion
         }
@@ -64,7 +72,9 @@ struct NativeResolvedVisualParameters: Equatable, Sendable {
               (0.0...1.0).contains(grainIntensity), (0.0...1.0).contains(grainScale),
               (0.0...1.0).contains(halation), (0.0...0.8).contains(vignette),
               (0.0...1.0).contains(bloom), (0.0...0.5).contains(edgeSoftness),
-              (-0.15...0.15).contains(distortion), (0.5...1.5).contains(sharpness) else {
+              (-0.15...0.15).contains(distortion), (0.5...1.5).contains(sharpness),
+              lensProfileVersion > 0, (0...1).contains(radialSoftness),
+              (0...0.01).contains(chromaticAberration), (0...1).contains(opticalFlare) else {
             throw NativeFilmImageProcessorError.invalidVisualParameters
         }
         self.schemaVersion = schemaVersion
@@ -88,6 +98,10 @@ struct NativeResolvedVisualParameters: Equatable, Sendable {
         self.edgeSoftness = edgeSoftness
         self.distortion = distortion
         self.sharpness = sharpness
+        self.lensProfileVersion = lensProfileVersion
+        self.radialSoftness = radialSoftness
+        self.chromaticAberration = chromaticAberration
+        self.opticalFlare = opticalFlare
     }
 }
 
@@ -106,7 +120,9 @@ enum NativeFilmVisualProfileCatalog {
             bodyId: recipe.cameraBodyID,
             lensId: recipe.lensID,
             filmStockId: recipe.filmStockID,
-            id: sharedRecipeID
+            id: sharedRecipeID,
+            lensProfileVersion: Int32(recipe.lensProfileVersion),
+            renderingSchemaVersion: Int32(recipe.renderingSchemaVersion)
         )
         guard let resolved = BuiltInVideoStyles.shared.resolve(recipe: sharedRecipe, styleId: videoStyleID) else {
             return nil
@@ -132,7 +148,11 @@ enum NativeFilmVisualProfileCatalog {
             bloom: resolved.bloom,
             edgeSoftness: resolved.edgeSoftness,
             distortion: resolved.distortion,
-            sharpness: resolved.sharpness
+            sharpness: resolved.sharpness,
+            lensProfileVersion: Int(resolved.lensProfileVersion),
+            radialSoftness: resolved.radialSoftness,
+            chromaticAberration: resolved.chromaticAberration,
+            opticalFlare: resolved.opticalFlare
         )
     }
 
@@ -152,6 +172,9 @@ struct NativeDevelopedMetadata: Codable, Equatable, Sendable {
     let filmStockID: String
     let filmProfileID: String
     let filmProfileVersion: Int
+    let lensProfileVersion: Int
+    let renderingAlgorithmID: String
+    let renderingSchemaVersion: Int
 }
 
 /// New JPEG bytes and their compact development record. `data` is safe to save as a new Photos asset.
@@ -160,7 +183,7 @@ struct DevelopedImageArtifact: Sendable {
     let metadata: NativeDevelopedMetadata
 }
 
-enum NativeFilmImageProcessorError: Error {
+enum NativeFilmImageProcessorError: LocalizedError, Sendable {
     case photoNotFound
     case photoLibraryReadDenied
     case photoLibraryAddDenied
@@ -171,11 +194,66 @@ enum NativeFilmImageProcessorError: Error {
     case renderingFailed
     case imageEncodingFailed
     case photosSaveFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .renderingFailed:
+            return NSLocalizedString("capture_error_rendering_failed", comment: "Optical image rendering error")
+        default:
+            return NSLocalizedString("capture_error_processing_failed", comment: "Image processing error")
+        }
+    }
 }
 
 /// Applies deterministic Core Image rendering to a Photos original without modifying it.
 /// Core Image work runs on a detached utility task. Seeded film grain is stable for a given profile.
 enum NativeFilmImageProcessor {
+    // The lens-specific optical transform uses normalized output coordinates,
+    // matching the preview and offline renderers on Android.
+    private static let disposableOpticsKernel = CIKernel(source: """
+        vec4 readPixel(sampler image, vec2 point, vec4 bounds) {
+            vec2 p = clamp(point, bounds.xy + vec2(0.5), bounds.xy + bounds.zw - vec2(0.5));
+            return sample(image, samplerTransform(image, p));
+        }
+        kernel vec4 disposableOptics(sampler image, vec4 bounds, float distortion,
+                                     float softness, float fringeAmount, float flare) {
+            vec2 p = destCoord();
+            vec2 center = (p - bounds.xy) / bounds.zw - vec2(0.5);
+            float radius2 = 4.0 * dot(center, center);
+            vec2 uv = (center * (1.0 + radius2 * distortion) + vec2(0.5)) * bounds.zw + bounds.xy;
+            vec2 fringe = center * radius2 * fringeAmount * bounds.zw;
+            vec4 color = readPixel(image, uv, bounds);
+            color.r = readPixel(image, uv + fringe, bounds).r;
+            color.b = readPixel(image, uv - fringe, bounds).b;
+            float shortSide = min(bounds.z, bounds.w);
+            float blur = shortSide * 0.006 * softness * min(radius2, 1.0);
+            vec4 soft = (readPixel(image, uv + vec2(blur, 0.0), bounds) +
+                         readPixel(image, uv - vec2(blur, 0.0), bounds) +
+                         readPixel(image, uv + vec2(0.0, blur), bounds) +
+                         readPixel(image, uv - vec2(0.0, blur), bounds)) * 0.25;
+            color.rgb = mix(color.rgb, soft.rgb, clamp(softness * radius2, 0.0, 0.65));
+            float spread = shortSide * 0.015;
+            vec3 lights = (readPixel(image, uv + vec2(spread, 0.0), bounds).rgb +
+                           readPixel(image, uv - vec2(spread, 0.0), bounds).rgb +
+                           readPixel(image, uv + vec2(0.0, spread), bounds).rgb +
+                           readPixel(image, uv - vec2(0.0, spread), bounds).rgb) * 0.25;
+            color.rgb += clamp((lights - vec3(0.745)) / 0.255, 0.0, 1.0) * flare * 0.098;
+            return color;
+        }
+        """)
+    private static let normalizedVignetteKernel = CIKernel(source: """
+        kernel vec4 normalizedVignette(sampler image, vec4 bounds, float amount) {
+            vec2 point = destCoord();
+            vec2 center = (point - bounds.xy) / bounds.zw - vec2(0.5);
+            float radiusSquared = 4.0 * dot(center, center);
+            float transition = clamp((radiusSquared - 0.18) / (0.75 - 0.18), 0.0, 1.0);
+            float falloff = transition * transition * (3.0 - 2.0 * transition);
+            vec4 color = sample(image, samplerTransform(image, point));
+            color.rgb *= 1.0 - amount * falloff;
+            return color;
+        }
+        """)
+
     static func developPhoto(
         assetLocalIdentifier: String,
         recipe: NativeCaptureRecipe,
@@ -183,7 +261,8 @@ enum NativeFilmImageProcessor {
     ) async throws -> DevelopedImageArtifact {
         guard parameters.filmStockID == recipe.filmStockID,
               parameters.cameraBodyID == recipe.cameraBodyID,
-              parameters.lensID == recipe.lensID else {
+              parameters.lensID == recipe.lensID,
+              parameters.lensProfileVersion == recipe.lensProfileVersion else {
             throw NativeFilmImageProcessorError.recipeProfileMismatch
         }
 
@@ -203,7 +282,10 @@ enum NativeFilmImageProcessor {
                     lensID: lensID,
                     filmStockID: filmID,
                     filmProfileID: parameters.filmProfileID,
-                    filmProfileVersion: parameters.filmProfileVersion
+                    filmProfileVersion: parameters.filmProfileVersion,
+                    lensProfileVersion: parameters.lensProfileVersion,
+                    renderingAlgorithmID: "theia.visual-pipeline",
+                    renderingSchemaVersion: parameters.schemaVersion
                 ),
                 parameters: parameters
             )
@@ -285,7 +367,7 @@ enum NativeFilmImageProcessor {
         guard !outputExtent.isNull, !outputExtent.isInfinite, outputExtent.width > 0, outputExtent.height > 0 else {
             throw NativeFilmImageProcessorError.renderingFailed
         }
-        image = applyVisualProfile(to: image, parameters: parameters)
+        image = try applyVisualProfile(to: image, parameters: parameters)
 
         let context = CIContext(options: [.cacheIntermediates: false])
         guard let renderedImage = context.createCGImage(image, from: outputExtent) else {
@@ -296,9 +378,29 @@ enum NativeFilmImageProcessor {
     }
 
     /// Shared frame transform used by still development, the filtered live preview, and video export.
-    static func applyVisualProfile(to source: CIImage, parameters: NativeResolvedVisualParameters) -> CIImage {
+    static func applyVisualProfile(to source: CIImage, parameters: NativeResolvedVisualParameters) throws -> CIImage {
+        switch parameters.schemaVersion {
+        case 1:
+            return try applyVisualProfileV1(to: source, parameters: parameters)
+        default:
+            throw NativeFilmImageProcessorError.unsupportedProfileVersion
+        }
+    }
+
+    private static func applyVisualProfileV1(to source: CIImage, parameters: NativeResolvedVisualParameters) throws -> CIImage {
         let outputExtent = source.extent.integral
         var image = source
+        let hasDisposableOptics = parameters.radialSoftness > 0 || parameters.chromaticAberration > 0 || parameters.opticalFlare > 0
+        if hasDisposableOptics {
+            guard let kernel = disposableOpticsKernel else { throw NativeFilmImageProcessorError.renderingFailed }
+            let bounds = CIVector(x: outputExtent.minX, y: outputExtent.minY, z: outputExtent.width, w: outputExtent.height)
+            guard let opticalImage = kernel.apply(
+                extent: outputExtent,
+                roiCallback: { _, rect in rect.insetBy(dx: -outputExtent.width * 0.2, dy: -outputExtent.height * 0.2) },
+                arguments: [image, bounds, parameters.distortion, parameters.radialSoftness, parameters.chromaticAberration, parameters.opticalFlare]
+            ) else { throw NativeFilmImageProcessorError.renderingFailed }
+            image = opticalImage
+        }
         image = applying(
             "CIExposureAdjust",
             to: image,
@@ -332,7 +434,7 @@ enum NativeFilmImageProcessor {
             ]
         )
 
-        if parameters.distortion != 0 {
+        if parameters.distortion != 0 && !hasDisposableOptics {
             image = applying(
                 "CIBumpDistortion",
                 to: image,
@@ -374,14 +476,25 @@ enum NativeFilmImageProcessor {
             )
         }
         if parameters.vignette > 0 {
-            image = applying(
-                "CIVignette",
-                to: image,
-                values: [
-                    kCIInputIntensityKey: parameters.vignette,
-                    kCIInputRadiusKey: min(outputExtent.width, outputExtent.height) * 0.78,
-                ]
-            )
+            if hasDisposableOptics {
+                guard let kernel = normalizedVignetteKernel else { throw NativeFilmImageProcessorError.renderingFailed }
+                let bounds = CIVector(x: outputExtent.minX, y: outputExtent.minY, z: outputExtent.width, w: outputExtent.height)
+                guard let vignettedImage = kernel.apply(
+                    extent: outputExtent,
+                    roiCallback: { _, rect in rect },
+                    arguments: [image, bounds, parameters.vignette]
+                ) else { throw NativeFilmImageProcessorError.renderingFailed }
+                image = vignettedImage
+            } else {
+                image = applying(
+                    "CIVignette",
+                    to: image,
+                    values: [
+                        kCIInputIntensityKey: parameters.vignette,
+                        kCIInputRadiusKey: min(outputExtent.width, outputExtent.height) * 0.78,
+                    ]
+                )
+            }
         }
         if parameters.grainIntensity > 0 {
             image = applyingDeterministicGrain(
@@ -497,6 +610,9 @@ enum NativeFilmImageProcessor {
             "film_id": metadata.filmStockID,
             "film_profile_id": metadata.filmProfileID,
             "film_profile_version": metadata.filmProfileVersion,
+            "lens_profile_version": metadata.lensProfileVersion,
+            "rendering_algorithm_id": metadata.renderingAlgorithmID,
+            "rendering_schema_version": metadata.renderingSchemaVersion,
             "filter_applied": true,
             "filter_applied_by": "theia",
         ]

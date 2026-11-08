@@ -13,6 +13,7 @@ import app.theia.android.album.AlbumMediaKind
 import app.theia.android.album.AlbumMetadataRepository
 import app.theia.android.album.AlbumPhoto
 import app.theia.domain.catalog.BuiltInFilmVisualProfiles
+import app.theia.domain.catalog.OpticalImageRenderer
 import app.theia.domain.model.CaptureRecipe
 import app.theia.domain.model.FilmRollCapacity
 import app.theia.domain.model.FilmRollId
@@ -188,6 +189,9 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
             "No built-in visual profile exists for this capture recipe"
         }
         val sourceUri = Uri.parse(photo.handle)
+        val sourceOrientation = appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
+            ExifInterface(input).getAttribute(ExifInterface.TAG_ORIENTATION)
+        }
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         val decodedBounds = appContext.contentResolver.openInputStream(sourceUri)?.use {
             BitmapFactory.decodeStream(it, null, options)
@@ -211,6 +215,7 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
         }
         developed.recycle()
         val exif = ExifInterface(output.absolutePath)
+        sourceOrientation?.let { exif.setAttribute(ExifInterface.TAG_ORIENTATION, it) }
         exif.setAttribute(
             ExifInterface.TAG_USER_COMMENT,
             JSONObject()
@@ -222,17 +227,21 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
                 .put("filter_applied_by", "theia")
                 .put("filter_profile_id", visual.filmProfileId)
                 .put("filter_profile_version", visual.filmProfileVersion)
+                .put("lens_profile_version", visual.lensProfileVersion)
+                .put("rendering_algorithm_id", app.theia.domain.catalog.BuiltInFilmVisualProfiles.RENDERING_ALGORITHM_ID)
+                .put("rendering_schema_version", visual.schemaVersion)
                 .toString(),
         )
         exif.saveAttributes()
         DevelopedPhoto(output.absolutePath)
     }
 
-    private fun transform(source: Bitmap, visual: app.theia.domain.model.ResolvedVisualParameters): IntArray {
+    private suspend fun transform(source: Bitmap, visual: app.theia.domain.model.ResolvedVisualParameters): IntArray {
         val width = source.width
         val height = source.height
-        val input = IntArray(width * height)
-        source.getPixels(input, 0, width, 0, 0, width, height)
+        val originalPixels = IntArray(width * height)
+        source.getPixels(originalPixels, 0, width, 0, 0, width, height)
+        val input = AndroidOpticalImageRenderer.render(originalPixels, width, height, visual)
         val output = IntArray(input.size)
         val exposureGain = 2.0.pow(visual.exposureBiasEv).toFloat()
         val seed = visual.filmProfileId.hashCode()
@@ -282,9 +291,17 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
                 green += highGlow * (visual.halation * 15f + visual.bloom * 20f).toFloat()
                 blue += highGlow * (visual.halation * 5f + visual.bloom * 20f).toFloat()
 
-                val nx = (x - width / 2f) / radius
-                val ny = (y - height / 2f) / radius
-                val vignetteFactor = (1f - visual.vignette.toFloat() * (nx * nx + ny * ny)).coerceAtLeast(0.2f)
+                val vignetteFactor = if (
+                    visual.radialSoftness > 0.0 || visual.chromaticAberration > 0.0 || visual.opticalFlare > 0.0
+                ) {
+                    val nx = (x + 0.5) / width - 0.5
+                    val ny = (y + 0.5) / height - 0.5
+                    OpticalImageRenderer.vignetteFactor(4.0 * (nx * nx + ny * ny), visual.vignette).toFloat()
+                } else {
+                    val nx = (x - width / 2f) / radius
+                    val ny = (y - height / 2f) / radius
+                    (1f - visual.vignette.toFloat() * (nx * nx + ny * ny)).coerceAtLeast(0.2f)
+                }
                 red *= vignetteFactor
                 green *= vignetteFactor
                 blue *= vignetteFactor

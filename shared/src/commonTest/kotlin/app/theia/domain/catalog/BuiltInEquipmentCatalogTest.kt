@@ -1,6 +1,7 @@
 package app.theia.domain.catalog
 
 import app.theia.domain.model.CaptureRecipe
+import app.theia.domain.model.LensId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -8,11 +9,18 @@ import kotlin.test.assertTrue
 
 class BuiltInEquipmentCatalogTest {
     @Test
+    fun disposableInspiredLensIsAvailableForRecipes() {
+        val entry = BuiltInEquipmentCatalog.lensEntry(LensId("lens-biscoito-32"))
+        assertNotNull(entry)
+        assertTrue(entry.isUnlocked)
+    }
+
+    @Test
     fun providesCompleteUnlockedCatalogAcrossEightFilmCollections() {
         val catalog = BuiltInEquipmentCatalog
 
         assertEquals(6, catalog.cameraBodyEntries.size)
-        assertEquals(8, catalog.lensEntries.size)
+        assertEquals(9, catalog.lensEntries.size)
         assertTrue(catalog.filmEntries.size >= 30)
         assertEquals(8, catalog.collections.size)
         assertEquals(catalog.collections.map { it.key }.toSet(), catalog.filmEntries.map { it.item.collectionKey }.toSet())

@@ -46,10 +46,14 @@ data class CaptureRecipe(
     val lensId: LensId,
     val filmStockId: FilmStockId,
     val id: CaptureRecipeId = CaptureRecipeId.forEquipment(bodyId, lensId, filmStockId),
+    val lensProfileVersion: Int = 1,
+    val renderingSchemaVersion: Int = 1,
 ) {
     init {
         require(id == CaptureRecipeId.forEquipment(bodyId, lensId, filmStockId)) {
             "Capture recipe ID must match its equipment combination"
         }
+        require(lensProfileVersion > 0) { "Lens profile versions must be positive" }
+        require(renderingSchemaVersion > 0) { "Rendering schema versions must be positive" }
     }
 }

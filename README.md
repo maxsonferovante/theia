@@ -17,6 +17,7 @@ The apps and shared domain compile, and the shared domain tests pass. Physical-d
 - Camera-first navigation decision: `docs/adr/0001-camera-first-interface.md`
 - Android interface captures from the Motorola Edge 60, including the compact horizon indicator and its expanded values: [`docs/screenshots/android/README.md`](docs/screenshots/android/README.md)
 - Catalog authoring: `docs/catalog-authoring.md`
+- Biscoito 32 optical profile and versioning: `docs/biscoito-32-optical-profile.md`
 - Performance validation: `docs/performance-validation.md`
 - Contribution guide: `CONTRIBUTING.md`
 - Brand mark: `assets/brand/theia-mark.svg`

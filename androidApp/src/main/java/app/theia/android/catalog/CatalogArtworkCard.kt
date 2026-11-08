@@ -65,7 +65,7 @@ fun CatalogArtworkCard(
         drawAmbientStars(seed, colors[3])
         when {
             artworkKey.startsWith("artwork.body.") -> drawCameraBody(seed, colors)
-            artworkKey.startsWith("artwork.lens.") -> drawLens(seed, colors)
+            artworkKey.startsWith("artwork.lens.") -> drawLens(artworkKey, seed, colors)
             artworkKey.startsWith("artwork.film.") -> drawFilmPrint(seed, colors)
             else -> drawCollectionMotif(seed, colors)
         }
@@ -128,9 +128,19 @@ private fun DrawScope.drawCameraBody(seed: Int, colors: List<Color>) {
     drawLine(colors[2].copy(alpha = 0.8f), Offset(left + bodyWidth * 0.73f, top + bodyHeight * 0.18f), Offset(left + bodyWidth * 0.9f, top + bodyHeight * 0.18f), h * 0.014f)
 }
 
-private fun DrawScope.drawLens(seed: Int, colors: List<Color>) {
+private fun DrawScope.drawLens(artworkKey: String, seed: Int, colors: List<Color>) {
     val w = size.width
     val h = size.height
+    if (artworkKey == "artwork.lens.biscoito-32") {
+        val center = Offset(w * 0.5f, h * 0.56f)
+        val radius = h * 0.31f
+        drawCircle(colors[4], radius * 1.12f, center)
+        drawCircle(colors[2], radius, center, style = Stroke(width = h * 0.055f))
+        drawCircle(colors[1], radius * 0.72f, center)
+        drawCircle(colors[6], radius * 0.48f, center)
+        drawCircle(colors[2].copy(alpha = 0.8f), radius * 0.12f, center + Offset(-radius * 0.18f, -radius * 0.2f))
+        return
+    }
     val centerX = w * (0.5f + (stableFraction(seed, 20) - 0.5f) * 0.12f)
     val centerY = h * 0.57f
     val barrelWidth = w * (0.28f + stableFraction(seed, 21) * 0.1f)

@@ -68,12 +68,18 @@ data class LensVisualAdjustment(
     val bloom: Double = 0.0,
     val distortion: Double = 0.0,
     val sharpness: Double = 1.0,
+    // Optical profile values are normalized to the rendered image, not sensor pixels.
+    val profileVersion: Int = 1,
+    val radialSoftness: Double = 0.0,
+    val chromaticAberration: Double = 0.0,
+    val opticalFlare: Double = 0.0,
 ) {
     init {
         require(edgeSoftness in 0.0..0.5 && halation in 0.0..0.5) { "Lens softness and halation must be between 0 and 0.5" }
         require(vignette in 0.0..0.4 && bloom in 0.0..0.4) { "Lens vignette and bloom must be between 0 and 0.4" }
         require(distortion in -0.15..0.15) { "Lens distortion must be between -0.15 and 0.15" }
         require(sharpness in 0.5..1.5) { "Lens sharpness must be between 0.5 and 1.5" }
+        require(profileVersion > 0 && radialSoftness in 0.0..1.0 && chromaticAberration in 0.0..0.01 && opticalFlare in 0.0..1.0) { "Lens optical profile is outside supported ranges" }
     }
 }
 
@@ -101,6 +107,10 @@ data class ResolvedVisualParameters(
     val edgeSoftness: Double,
     val distortion: Double,
     val sharpness: Double,
+    val lensProfileVersion: Int = 1,
+    val radialSoftness: Double = 0.0,
+    val chromaticAberration: Double = 0.0,
+    val opticalFlare: Double = 0.0,
 ) {
     init {
         require(schemaVersion > 0 && filmProfileVersion > 0) { "Rendering schema and profile versions must be positive" }
@@ -116,5 +126,6 @@ data class ResolvedVisualParameters(
         require(edgeSoftness in 0.0..0.5 && distortion in -0.15..0.15 && sharpness in 0.5..1.5) {
             "Resolved lens values are outside supported ranges"
         }
+        require(lensProfileVersion > 0 && radialSoftness in 0.0..1.0 && chromaticAberration in 0.0..0.01 && opticalFlare in 0.0..1.0) { "Resolved optical profile is outside supported ranges" }
     }
 }

@@ -43,6 +43,9 @@
 "catalog_lens_tilt_name" = "Prism Tilt";
 "catalog_lens_tilt_description" = "Uma lente de foco seletivo com plano estreito de nitidez e bordas suavemente desfocadas.";
 "catalog_lens_tilt_visual" = "Lente Prism Tilt: Uma lente de foco seletivo com plano estreito de nitidez e bordas suavemente desfocadas. Barril facetado de bronze com janela de prisma violeta e marcas de inclinação.";
+"catalog_lens_biscoito_32_name" = "Biscoito 32";
+"catalog_lens_biscoito_32_description" = "Uma lente compacta com centro nítido, bordas suaves e vinheta nostálgica.";
+"catalog_lens_biscoito_32_visual" = "Biscoito 32: Lente circular fina e escura com anel creme e pequeno centro de vidro violeta.";
 "catalog_film_apricot_noon_name" = "Apricot Noon";
 "catalog_film_apricot_noon_description" = "Luzes âmbar quentes, céus claros e grão suave para sombras abertas.";
 "catalog_film_apricot_noon_visual" = "Filme Apricot Noon: Luzes âmbar quentes, céus claros e grão suave para sombras abertas. Moldura pêssego-claro com sol do meio-dia irradiando e grão creme fino.";
@@ -479,3 +482,5 @@
 "Recipe ID" = "ID da receita";
 "Roll" = "Rolo";
 "Done" = "Concluído";
+"capture_error_rendering_failed" = "Não foi possível renderizar o efeito da lente. O original permanece sem alterações.";
+"capture_error_processing_failed" = "Não foi possível processar a imagem. O original permanece sem alterações.";
