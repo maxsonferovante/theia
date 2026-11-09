@@ -43,6 +43,9 @@
 "catalog_lens_tilt_name" = "Prism Tilt";
 "catalog_lens_tilt_description" = "Uma lente de foco seletivo com plano estreito de nitidez e bordas suavemente desfocadas.";
 "catalog_lens_tilt_visual" = "Lente Prism Tilt: Uma lente de foco seletivo com plano estreito de nitidez e bordas suavemente desfocadas. Barril facetado de bronze com janela de prisma violeta e marcas de inclinação.";
+"catalog_lens_biscoito_32_name" = "Biscoito 32";
+"catalog_lens_biscoito_32_description" = "Uma lente compacta com centro nítido, bordas suaves e vinheta nostálgica.";
+"catalog_lens_biscoito_32_visual" = "Biscoito 32: Lente circular fina e escura com anel creme e pequeno centro de vidro violeta.";
 "catalog_film_apricot_noon_name" = "Apricot Noon";
 "catalog_film_apricot_noon_description" = "Luzes âmbar quentes, céus claros e grão suave para sombras abertas.";
 "catalog_film_apricot_noon_visual" = "Filme Apricot Noon: Luzes âmbar quentes, céus claros e grão suave para sombras abertas. Moldura pêssego-claro com sol do meio-dia irradiando e grão creme fino.";
@@ -233,7 +236,7 @@
 "settings_camera_permission" = "Câmera";
 "settings_camera_permission_description" = "Necessária apenas para mostrar o visor e capturar fotos.";
 "settings_photos_permission" = "Fotos e mídia";
-"settings_photos_permission_description" = "Permite que o Théia salve originais e cópias reveladas na sua galeria.";
+"settings_photos_permission_description" = "Salva originais em Théia/Originais e cópias reveladas em Théia/Reveladas no Fotos.";
 "settings_microphone_permission" = "Microfone";
 "settings_microphone_permission_description" = "Necessário apenas para gravar vídeos com áudio.";
 "settings_location_permission" = "Localização";
@@ -292,7 +295,7 @@
 "capture_open_settings" = "Abrir Ajustes";
 "capture_error_camera_unavailable" = "Não há uma câmera compatível neste dispositivo.";
 "capture_error_session_unavailable" = "A câmera não está pronta. Feche e abra a captura novamente e tente outra vez.";
-"capture_error_photo_permission" = "Permita que Théia adicione fotos nos Ajustes para salvar este original.";
+"capture_error_photo_permission" = "Permita que Théia acesse o Fotos para organizar este original na pasta Théia.";
 "capture_error_photo_save" = "Não foi possível salvar a foto. A captura não foi adicionada à galeria. Tente novamente.";
 "capture_error_photo_prepare" = "A câmera não conseguiu preparar esta foto. Tente capturar novamente.";
 "video_title" = "Vídeo";
@@ -410,7 +413,7 @@
 "roll_error_duplicate" = "Esta foto já está atribuída ao rolo.";
 "roll_error_capture_missing" = "Esta foto não pertence ao rolo.";
 "roll_error_not_full" = "Complete o rolo para revelar ou escolha a revelação antecipada.";
-"roll_error_photos_permission" = "Permita que o Théia adicione cópias reveladas ao Fotos.";
+"roll_error_photos_permission" = "Permita que o Théia acesse o Fotos para organizar as cópias reveladas na pasta Théia.";
 "roll_error_asset" = "O item original do Fotos não está disponível neste dispositivo.";
 "roll_error_save" = "Não foi possível salvar a foto revelada.";
 "roll_fixed_recipe" = "Receita fixa";
@@ -479,3 +482,5 @@
 "Recipe ID" = "ID da receita";
 "Roll" = "Rolo";
 "Done" = "Concluído";
+"capture_error_rendering_failed" = "Não foi possível renderizar o efeito da lente. O original permanece sem alterações.";
+"capture_error_processing_failed" = "Não foi possível processar a imagem. O original permanece sem alterações.";

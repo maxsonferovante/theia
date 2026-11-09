@@ -1,1 +1,2 @@
-"NSPhotoLibraryUsageDescription" = "Théia opens your recent photos only when you ask to view the latest photo or share a capture.";
+"NSPhotoLibraryAddUsageDescription" = "Théia saves original and developed captures in separate albums in your photo library.";
+"NSPhotoLibraryUsageDescription" = "Théia organizes original and developed captures in albums inside a Théia folder and accesses linked items when you open or manage them.";

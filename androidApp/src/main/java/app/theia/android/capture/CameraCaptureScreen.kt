@@ -7,9 +7,9 @@ import android.content.pm.PackageManager
 import android.media.MediaActionSound
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.MediaStore
 import android.util.Range
+import app.theia.android.album.TheiaGalleryFolders
 import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +27,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,7 +38,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -110,6 +111,7 @@ private val CameraStone = Color(0xFFB6A58C)
  * requested. Captured originals are immediately published to MediaStore.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun CameraCaptureScreen(
     recipe: CaptureRecipe,
     onPhotoSaved: (Uri, CaptureRecipe) -> Unit,
@@ -419,7 +421,7 @@ fun CameraCaptureScreen(
                 }
 
                 if (permissionsGranted && cameraSession != null) {
-                    HorizonLevelOverlay(Modifier.align(Alignment.Center).offset(y = (-140).dp))
+                    HorizonLevelOverlay(Modifier.align(Alignment.TopEnd).padding(top = 88.dp, end = 12.dp))
                 }
 
                 if (captureMessage != null || timerCountdown > 0 || focusMessage != null || remainingExposures != null) {
@@ -492,7 +494,11 @@ fun CameraCaptureScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                     if (flashAvailable) {
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             FlashChoice.entries.forEach { choice ->
                                 FilterChip(
                                     selected = flashChoice == choice,
@@ -508,10 +514,10 @@ fun CameraCaptureScreen(
                         Text(stringResource(R.string.camera_flash_unavailable), color = CameraStone)
                     }
 
-                    Row(
-                        Modifier.horizontalScroll(rememberScrollState()).testTag("camera-options"),
+                    FlowRow(
+                        Modifier.fillMaxWidth().testTag("camera-options"),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         listOf(0, 3, 10).forEach { seconds ->
                             FilterChip(
@@ -822,12 +828,11 @@ private fun publishOriginal(context: Context, displayName: String, temporaryFile
         put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
         put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Théia")
+            put(MediaStore.Images.Media.RELATIVE_PATH, TheiaGalleryFolders.relativePath(TheiaGalleryFolders.ORIGINALS))
             put(MediaStore.Images.Media.IS_PENDING, 1)
         } else {
             put(MediaStore.Images.Media.TITLE, displayName.removeSuffix(".jpg"))
-            val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-            val targetDirectory = java.io.File(pictures, "Théia")
+            val targetDirectory = TheiaGalleryFolders.legacyDirectory(TheiaGalleryFolders.ORIGINALS)
             check(targetDirectory.exists() || targetDirectory.mkdirs()) {
                 context.getString(R.string.camera_gallery_unavailable)
             }

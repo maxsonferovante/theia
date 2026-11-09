@@ -7,12 +7,13 @@ import android.graphics.BitmapFactory
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.MediaStore
 import app.theia.android.album.AlbumMediaKind
+import app.theia.android.album.TheiaGalleryFolders
 import app.theia.android.album.AlbumMetadataRepository
 import app.theia.android.album.AlbumPhoto
 import app.theia.domain.catalog.BuiltInFilmVisualProfiles
+import app.theia.domain.catalog.OpticalImageRenderer
 import app.theia.domain.model.CaptureRecipe
 import app.theia.domain.model.FilmRollCapacity
 import app.theia.domain.model.FilmRollId
@@ -34,6 +35,7 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.math.pow
 import kotlin.math.sqrt
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -187,6 +189,9 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
             "No built-in visual profile exists for this capture recipe"
         }
         val sourceUri = Uri.parse(photo.handle)
+        val sourceOrientation = appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
+            ExifInterface(input).getAttribute(ExifInterface.TAG_ORIENTATION)
+        }
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         val decodedBounds = appContext.contentResolver.openInputStream(sourceUri)?.use {
             BitmapFactory.decodeStream(it, null, options)
@@ -210,19 +215,33 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
         }
         developed.recycle()
         val exif = ExifInterface(output.absolutePath)
+        sourceOrientation?.let { exif.setAttribute(ExifInterface.TAG_ORIENTATION, it) }
         exif.setAttribute(
             ExifInterface.TAG_USER_COMMENT,
-            "{\"version\":1,\"recipe\":\"${recipe.id.value}\",\"filmProfile\":\"${visual.filmProfileId}\",\"profileVersion\":${visual.filmProfileVersion}}",
+            JSONObject()
+                .put("version", 1)
+                .put("recipe", recipe.id.value)
+                .put("filmProfile", visual.filmProfileId)
+                .put("profileVersion", visual.filmProfileVersion)
+                .put("filter_applied", true)
+                .put("filter_applied_by", "theia")
+                .put("filter_profile_id", visual.filmProfileId)
+                .put("filter_profile_version", visual.filmProfileVersion)
+                .put("lens_profile_version", visual.lensProfileVersion)
+                .put("rendering_algorithm_id", app.theia.domain.catalog.BuiltInFilmVisualProfiles.RENDERING_ALGORITHM_ID)
+                .put("rendering_schema_version", visual.schemaVersion)
+                .toString(),
         )
         exif.saveAttributes()
         DevelopedPhoto(output.absolutePath)
     }
 
-    private fun transform(source: Bitmap, visual: app.theia.domain.model.ResolvedVisualParameters): IntArray {
+    private suspend fun transform(source: Bitmap, visual: app.theia.domain.model.ResolvedVisualParameters): IntArray {
         val width = source.width
         val height = source.height
-        val input = IntArray(width * height)
-        source.getPixels(input, 0, width, 0, 0, width, height)
+        val originalPixels = IntArray(width * height)
+        source.getPixels(originalPixels, 0, width, 0, 0, width, height)
+        val input = AndroidOpticalImageRenderer.render(originalPixels, width, height, visual)
         val output = IntArray(input.size)
         val exposureGain = 2.0.pow(visual.exposureBiasEv).toFloat()
         val seed = visual.filmProfileId.hashCode()
@@ -272,9 +291,17 @@ private class ProfiledBitmapImageProcessor(context: Context) : ImageProcessingPo
                 green += highGlow * (visual.halation * 15f + visual.bloom * 20f).toFloat()
                 blue += highGlow * (visual.halation * 5f + visual.bloom * 20f).toFloat()
 
-                val nx = (x - width / 2f) / radius
-                val ny = (y - height / 2f) / radius
-                val vignetteFactor = (1f - visual.vignette.toFloat() * (nx * nx + ny * ny)).coerceAtLeast(0.2f)
+                val vignetteFactor = if (
+                    visual.radialSoftness > 0.0 || visual.chromaticAberration > 0.0 || visual.opticalFlare > 0.0
+                ) {
+                    val nx = (x + 0.5) / width - 0.5
+                    val ny = (y + 0.5) / height - 0.5
+                    OpticalImageRenderer.vignetteFactor(4.0 * (nx * nx + ny * ny), visual.vignette).toFloat()
+                } else {
+                    val nx = (x - width / 2f) / radius
+                    val ny = (y - height / 2f) / radius
+                    (1f - visual.vignette.toFloat() * (nx * nx + ny * ny)).coerceAtLeast(0.2f)
+                }
                 red *= vignetteFactor
                 green *= vignetteFactor
                 blue *= vignetteFactor
@@ -347,10 +374,10 @@ private class MediaStorePhotoLibrary(context: Context) : MediaLibraryPort {
             put(MediaStore.Images.Media.DISPLAY_NAME, "Theia_revealed_${System.currentTimeMillis()}.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Théia")
+                put(MediaStore.Images.Media.RELATIVE_PATH, TheiaGalleryFolders.relativePath(TheiaGalleryFolders.REVEALED))
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             } else {
-                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Théia")
+                val dir = TheiaGalleryFolders.legacyDirectory(TheiaGalleryFolders.REVEALED)
                 check(dir.exists() || dir.mkdirs()) { "Could not create Théia gallery folder" }
                 put(MediaStore.Images.Media.DATA, File(dir, "Theia_revealed_${System.currentTimeMillis()}.jpg").absolutePath)
             }

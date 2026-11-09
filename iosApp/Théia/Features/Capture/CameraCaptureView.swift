@@ -10,6 +10,27 @@ struct NativeCaptureRecipe: Codable, Equatable, Hashable, Sendable {
     let cameraBodyID: String
     let lensID: String
     let filmStockID: String
+    let lensProfileVersion: Int
+    let renderingSchemaVersion: Int
+
+    init(cameraBodyID: String, lensID: String, filmStockID: String, lensProfileVersion: Int = 1, renderingSchemaVersion: Int = 1) {
+        self.cameraBodyID = cameraBodyID
+        self.lensID = lensID
+        self.filmStockID = filmStockID
+        self.lensProfileVersion = lensProfileVersion
+        self.renderingSchemaVersion = renderingSchemaVersion
+    }
+
+    private enum CodingKeys: String, CodingKey { case cameraBodyID, lensID, filmStockID, lensProfileVersion, renderingSchemaVersion }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        cameraBodyID = try values.decode(String.self, forKey: .cameraBodyID)
+        lensID = try values.decode(String.self, forKey: .lensID)
+        filmStockID = try values.decode(String.self, forKey: .filmStockID)
+        lensProfileVersion = try values.decodeIfPresent(Int.self, forKey: .lensProfileVersion) ?? 1
+        renderingSchemaVersion = try values.decodeIfPresent(Int.self, forKey: .renderingSchemaVersion) ?? 1
+    }
 
     var stableID: String { "\(cameraBodyID)|\(lensID)|\(filmStockID)" }
 }
@@ -43,7 +64,7 @@ struct CameraCaptureView: View {
             Color.black.ignoresSafeArea()
 
             if camera.isAuthorized {
-                CameraPreview(session: camera.session, onFocus: camera.focus(at:))
+                CameraPreview(session: camera.session, image: camera.previewFrame, onFocus: camera.focus(at:))
                     .ignoresSafeArea()
                     .overlay(alignment: .top) {
                         if camera.showGrid {
@@ -92,7 +113,7 @@ struct CameraCaptureView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .task { camera.prepareCameraPermissionState() }
+        .task(id: recipe) { camera.prepareCameraPermissionState(recipe: recipe) }
         .modifier(HardwareCaptureEventModifier(
             isEnabled: camera.isAuthorized && camera.session.isRunning && !camera.isCapturing && !camera.isSaving && !isResolvingGeotag,
             action: captureFromShutter
@@ -401,8 +422,10 @@ private final class CameraCaptureModel: ObservableObject {
     @Published var showError = false
     @Published private(set) var errorMessage = ""
     @Published private(set) var savedRecord: NativeCaptureRecord?
+    @Published private(set) var previewFrame: CGImage?
 
     private let sessionQueue = DispatchQueue(label: "app.theia.camera.session")
+    private let frameProcessor = NativeFilmVideoFrameProcessor()
     private var pendingRecipe: NativeCaptureRecipe?
     private var photoDelegate: PhotoCaptureDelegate?
     private var countdownCancelled = false
@@ -410,7 +433,24 @@ private final class CameraCaptureModel: ObservableObject {
     var permissionDeniedForUI: Bool { permissionDenied }
     var timerLocalizationKey: String { TimerMode(rawValue: timerSeconds)?.localizationKey ?? "capture_timer_off" }
 
-    func prepareCameraPermissionState() {
+    init() {
+        frameProcessor.onPreviewFrame = { [weak self] image in self?.previewFrame = image }
+        frameProcessor.onProcessingError = { [weak self] in
+            self?.previewFrame = nil
+            self?.present(NativeFilmImageProcessorError.renderingFailed)
+        }
+    }
+
+    func prepareCameraPermissionState(recipe: NativeCaptureRecipe) {
+        do {
+            guard let parameters = try NativeFilmVisualProfileCatalog.resolve(recipe: recipe) else {
+                throw NativeFilmImageProcessorError.unsupportedProfileVersion
+            }
+            frameProcessor.configure(parameters: parameters)
+        } catch {
+            present(error)
+            return
+        }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             configureAndStart()
@@ -468,6 +508,10 @@ private final class CameraCaptureModel: ObservableObject {
                 engine.session.addInput(newInput)
                 engine.currentInput = newInput
                 engine.activeDevice = device
+                if let connection = engine.videoDataOutput.connection(with: .video), connection.isVideoMirroringSupported {
+                    connection.automaticallyAdjustsVideoMirroring = false
+                    connection.isVideoMirrored = nextPosition == .front
+                }
                 self?.updateZoomRange(device)
                 self?.updateCaptureCapabilities(device, photoOutput: engine.photoOutput)
             } else if let currentInput = engine.currentInput, engine.session.canAddInput(currentInput) {
@@ -564,7 +608,9 @@ private final class CameraCaptureModel: ObservableObject {
         countdownCancelled = false
         do {
             try await requestPhotoLibraryAccess()
-            guard PHPhotoLibrary.authorizationStatus(for: .addOnly) == .authorized || PHPhotoLibrary.authorizationStatus(for: .addOnly) == .limited else {
+            guard TheiaPhotoLibraryOrganizer.hasReadWriteAccess(
+                PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            ) else {
                 throw CameraError.photoPermissionDenied
             }
             if timerSeconds > 0 {
@@ -625,6 +671,8 @@ private final class CameraCaptureModel: ObservableObject {
 
     private func configureAndStart() {
         let engine = engine
+        let frameProcessor = frameProcessor
+        let sessionQueue = sessionQueue
         sessionQueue.async { [weak self, engine] in
             guard !engine.session.isRunning else {
                 Task { @MainActor in self?.isAuthorized = true }
@@ -637,15 +685,23 @@ private final class CameraCaptureModel: ObservableObject {
             }
             engine.session.beginConfiguration()
             engine.session.sessionPreset = .photo
+            engine.videoDataOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)]
+            engine.videoDataOutput.alwaysDiscardsLateVideoFrames = true
+            engine.videoDataOutput.setSampleBufferDelegate(frameProcessor, queue: sessionQueue)
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                   let input = try? AVCaptureDeviceInput(device: device),
-                  engine.session.canAddInput(input), engine.session.canAddOutput(engine.photoOutput) else {
+                  engine.session.canAddInput(input), engine.session.canAddOutput(engine.photoOutput),
+                  engine.session.canAddOutput(engine.videoDataOutput) else {
                 engine.session.commitConfiguration()
                 Task { @MainActor in self?.present(CameraError.cameraUnavailable) }
                 return
             }
             engine.session.addInput(input)
             engine.session.addOutput(engine.photoOutput)
+            engine.session.addOutput(engine.videoDataOutput)
+            if let connection = engine.videoDataOutput.connection(with: .video), connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
+            }
             engine.currentInput = input
             engine.activeDevice = device
             self?.updateZoomRange(device)
@@ -690,38 +746,28 @@ private final class CameraCaptureModel: ObservableObject {
     }
 
     private func requestPhotoLibraryAccess() async throws {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        if status == .authorized || status == .limited { return }
-        if status == .notDetermined {
-            let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-            if newStatus == .authorized || newStatus == .limited { return }
+        let status = await TheiaPhotoLibraryOrganizer.requestReadWriteAuthorization()
+        guard TheiaPhotoLibraryOrganizer.hasReadWriteAccess(status) else {
+            throw CameraError.photoPermissionDenied
         }
-        throw CameraError.photoPermissionDenied
     }
 
     private func savePhoto(_ data: Data, recipe: NativeCaptureRecipe, geotagMetadata: LocalGeotagMetadata?) async {
         isSaving = true
         defer { isSaving = false }
         do {
-            let identifier = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-                var placeholderIdentifier: String?
-                PHPhotoLibrary.shared().performChanges {
-                    let request = PHAssetCreationRequest.forAsset()
-                    request.addResource(with: .photo, data: data, options: nil)
-                    placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
-                } completionHandler: { success, error in
-                    if let error { continuation.resume(throwing: error) }
-                    else if success, let placeholderIdentifier { continuation.resume(returning: placeholderIdentifier) }
-                    else { continuation.resume(throwing: CameraError.saveFailed) }
-                }
-            }
+            let identifier = try await TheiaPhotoLibraryOrganizer.save(
+                data: data,
+                originalFilename: nil,
+                destination: .originals
+            )
             savedRecord = NativeCaptureRecord(
                 localIdentifier: identifier,
                 recipe: recipe,
                 capturedAt: Date(),
                 geotagMetadata: geotagMetadata
             )
-        } catch { present(error) }
+        } catch { present(CameraError.saveFailed) }
     }
 
     private func present(_ error: Error) {
@@ -749,6 +795,7 @@ private final class CameraCaptureModel: ObservableObject {
 private final class CameraCaptureEngine: @unchecked Sendable {
     let session = AVCaptureSession()
     let photoOutput = AVCapturePhotoOutput()
+    let videoDataOutput = AVCaptureVideoDataOutput()
     var activeDevice: AVCaptureDevice?
     var currentInput: AVCaptureDeviceInput?
 }
@@ -775,18 +822,21 @@ private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegat
 
 fileprivate struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    let image: CGImage?
     let onFocus: (CGPoint) -> Void
 
     fileprivate func makeUIView(context: Context) -> PreviewUIView {
         let view = PreviewUIView()
         view.previewLayer.videoGravity = .resizeAspectFill
         view.previewLayer.session = session
+        view.filteredImage.image = image.map { UIImage(cgImage: $0) }
         view.onFocus = onFocus
         return view
     }
 
     fileprivate func updateUIView(_ view: PreviewUIView, context: Context) {
         view.previewLayer.session = session
+        view.filteredImage.image = image.map { UIImage(cgImage: $0) }
         view.onFocus = onFocus
     }
 
@@ -794,14 +844,24 @@ fileprivate struct CameraPreview: UIViewRepresentable {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
         var onFocus: ((CGPoint) -> Void)?
+        let filteredImage = UIImageView()
 
         override init(frame: CGRect) {
             super.init(frame: frame)
+            filteredImage.contentMode = .scaleAspectFill
+            filteredImage.clipsToBounds = true
+            filteredImage.isUserInteractionEnabled = false
+            addSubview(filteredImage)
             let tap = UITapGestureRecognizer(target: self, action: #selector(focus(_:)))
             addGestureRecognizer(tap)
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            filteredImage.frame = bounds
+        }
 
         @objc private func focus(_ gesture: UITapGestureRecognizer) {
             let point = gesture.location(in: self)

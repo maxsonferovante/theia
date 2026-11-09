@@ -172,11 +172,23 @@ fun RecipePickerSheet(
                             }
                         },
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = if (selected) PickerGold.copy(alpha = 0.18f) else PickerViolet),
+                        colors = CardDefaults.cardColors(containerColor = if (selected) PickerGold else PickerViolet),
                     ) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(item.name, color = PickerIvory, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(item.description, color = PickerStone, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                item.name,
+                                color = if (selected) PickerNavy else PickerIvory,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                item.description,
+                                color = if (selected) PickerNavy else PickerStone,
+                                fontSize = 11.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }

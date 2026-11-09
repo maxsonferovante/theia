@@ -43,5 +43,9 @@
     <string name="camera_roll_remaining">%1$d exposições restantes</string>
     <string name="camera_horizon_level">Nível de horizonte em três eixos</string>
     <string name="camera_horizon_axes">Guinada %1$s°, inclinação %2$s°, rolagem %3$s°</string>
+    <string name="camera_horizon_values_shown">Valores visíveis</string>
+    <string name="camera_horizon_values_hidden">Valores ocultos</string>
+    <string name="camera_horizon_show_values">Mostrar valores do nível</string>
+    <string name="camera_horizon_hide_values">Ocultar valores do nível</string>
     <string name="camera_horizon_unavailable">Sensor de nível indisponível</string>
 </resources>

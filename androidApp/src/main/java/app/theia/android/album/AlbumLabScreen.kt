@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
 import android.widget.VideoView
+import android.graphics.Matrix
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.exifinterface.media.ExifInterface
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -615,9 +617,10 @@ private fun decodeAlbumPreview(context: android.content.Context, uri: Uri): andr
     if (!decodedBounds) return null
     var sampleSize = 1
     while (bounds.outWidth / sampleSize > 1200 || bounds.outHeight / sampleSize > 1200) sampleSize *= 2
-    return context.contentResolver.openInputStream(uri)?.use { input ->
+    val decoded = context.contentResolver.openInputStream(uri)?.use { input ->
         BitmapFactory.decodeStream(input, null, BitmapFactory.Options().apply { inSampleSize = sampleSize })
-    }
+    } ?: return null
+    return applyExifOrientation(context, uri, decoded)
 }
 
 private fun decodeViewerBitmap(context: android.content.Context, uri: Uri): android.graphics.Bitmap? {
@@ -629,9 +632,31 @@ private fun decodeViewerBitmap(context: android.content.Context, uri: Uri): andr
     if (!decodedBounds) return null
     var sampleSize = 1
     while (bounds.outWidth / sampleSize > 2400 || bounds.outHeight / sampleSize > 2400) sampleSize *= 2
-    return context.contentResolver.openInputStream(uri)?.use { input ->
+    val decoded = context.contentResolver.openInputStream(uri)?.use { input ->
         BitmapFactory.decodeStream(input, null, BitmapFactory.Options().apply { inSampleSize = sampleSize })
+    } ?: return null
+    return applyExifOrientation(context, uri, decoded)
+}
+
+private fun applyExifOrientation(
+    context: android.content.Context,
+    uri: Uri,
+    bitmap: android.graphics.Bitmap,
+): android.graphics.Bitmap {
+    val exif = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input -> ExifInterface(input) }
+    }.getOrNull() ?: return bitmap
+    val degrees = exif.rotationDegrees
+    val flipped = exif.isFlipped
+    if (degrees == 0 && !flipped) return bitmap
+
+    val matrix = Matrix().apply {
+        postRotate(degrees.toFloat())
+        if (flipped) postScale(-1f, 1f)
     }
+    val oriented = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    if (oriented !== bitmap) bitmap.recycle()
+    return oriented
 }
 
 private fun sharePhoto(context: android.content.Context, photo: AlbumPhoto) {

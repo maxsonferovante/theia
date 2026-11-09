@@ -308,7 +308,9 @@ struct ContentView: View {
         return NativeCaptureRecipe(
             cameraBodyID: selection.cameraBodyID,
             lensID: selection.lensID,
-            filmStockID: selection.filmStockID
+            filmStockID: selection.filmStockID,
+            lensProfileVersion: 1,
+            renderingSchemaVersion: 1
         )
     }
 

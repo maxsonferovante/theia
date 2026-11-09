@@ -28,13 +28,14 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,13 +45,17 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -101,12 +106,30 @@ private val VideoNavy = Color(0xFF182344)
 private val VideoViolet = Color(0xFF2D2D57)
 private val VideoGold = Color(0xFFEAAE35)
 private val VideoIvory = Color(0xFFE7D7B7)
+private val VideoStone = Color(0xFFB6A58C)
+private val VideoColorScheme = darkColorScheme(
+    primary = VideoGold,
+    onPrimary = VideoNavy,
+    primaryContainer = VideoViolet,
+    onPrimaryContainer = VideoIvory,
+    secondary = VideoGold,
+    onSecondary = VideoNavy,
+    secondaryContainer = VideoGold,
+    onSecondaryContainer = VideoNavy,
+    background = VideoNavy,
+    onBackground = VideoIvory,
+    surface = VideoNavy,
+    onSurface = VideoIvory,
+    surfaceVariant = VideoViolet,
+    onSurfaceVariant = VideoIvory,
+)
 private const val MAX_RECORDING_DURATION_MILLIS = 60_000L
 private val videoMetadataExecutor = Executors.newSingleThreadExecutor { task ->
     Thread(task, "theia-video-metadata").apply { isDaemon = true }
 }
 
 /** Video capture view with 1080p/30 preferred and lower-quality device fallback. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun VideoCaptureScreen(
     recipe: CaptureRecipe,
@@ -143,6 +166,14 @@ fun VideoCaptureScreen(
     val audioState = stringResource(if (includeAudio) R.string.video_audio_on else R.string.video_audio_off)
     val recordingStatus = stringResource(R.string.video_recording_status)
     val previewDescription = stringResource(R.string.video_live_preview_description)
+    val videoChipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = VideoGold,
+        selectedLabelColor = VideoNavy,
+        containerColor = VideoViolet,
+        labelColor = VideoIvory,
+        disabledContainerColor = VideoViolet,
+        disabledLabelColor = VideoStone,
+    )
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         cameraGranted = cameraPermissions.all { results[it] == true || context.hasRuntimePermission(it) }
@@ -282,7 +313,7 @@ fun VideoCaptureScreen(
         }
     }
 
-    MaterialTheme {
+    MaterialTheme(colorScheme = VideoColorScheme) {
         Surface(modifier.fillMaxSize(), color = VideoNavy, contentColor = VideoIvory) {
             Box(Modifier.fillMaxSize()) {
                 if (cameraGranted) {
@@ -351,9 +382,10 @@ fun VideoCaptureScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(stringResource(R.string.video_style_label), color = VideoIvory, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    FlowRow(
+                        Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         val styleChoices = listOf(
                             BuiltInVideoStyles.EQUIPMENT_RECIPE_ID to R.string.video_style_recipe,
@@ -371,13 +403,17 @@ fun VideoCaptureScreen(
                                 onClick = { if (activeRecording == null) selectedVideoStyleId = styleId },
                                 enabled = activeRecording == null,
                                 modifier = Modifier.heightIn(min = 48.dp),
+                                colors = videoChipColors,
                                 label = { Text(stringResource(requireNotNull(nameResource)), maxLines = 1) },
                             )
                         }
                     }
                     if (highResolutionSupported) {
                         Text(stringResource(R.string.video_resolution_label), color = VideoIvory, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             FilterChip(
                                 selected = !highResolutionEnabled,
                                 onClick = {
@@ -388,6 +424,7 @@ fun VideoCaptureScreen(
                                 },
                                 enabled = activeRecording == null,
                                 modifier = Modifier.heightIn(min = 48.dp),
+                                colors = videoChipColors,
                                 label = { Text(stringResource(R.string.video_resolution_1080p)) },
                             )
                             FilterChip(
@@ -400,6 +437,7 @@ fun VideoCaptureScreen(
                                 },
                                 enabled = activeRecording == null,
                                 modifier = Modifier.heightIn(min = 48.dp),
+                                colors = videoChipColors,
                                 label = { Text(stringResource(R.string.video_resolution_4k)) },
                             )
                         }
@@ -435,6 +473,13 @@ fun VideoCaptureScreen(
                             checked = includeAudio,
                             onCheckedChange = null,
                             enabled = activeRecording == null,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = VideoGold,
+                                uncheckedColor = VideoIvory,
+                                checkmarkColor = VideoNavy,
+                                disabledCheckedColor = VideoStone,
+                                disabledUncheckedColor = VideoStone,
+                            ),
                             modifier = Modifier.clearAndSetSemantics {},
                         )
                         Text(audioLabel, color = VideoIvory)
@@ -491,6 +536,12 @@ fun VideoCaptureScreen(
                             if (activeRecording != null) stateDescription = recordingStatus
                         },
                         shape = RoundedCornerShape(18.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VideoGold,
+                            contentColor = VideoNavy,
+                            disabledContainerColor = VideoViolet,
+                            disabledContentColor = VideoIvory,
+                        ),
                     ) {
                         Text(if (activeRecording == null) stringResource(R.string.video_start) else stringResource(R.string.video_stop))
                     }

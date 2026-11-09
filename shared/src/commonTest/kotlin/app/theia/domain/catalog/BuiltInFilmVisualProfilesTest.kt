@@ -6,12 +6,53 @@ import app.theia.domain.model.FilmStockId
 import app.theia.domain.model.LensId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertNotNull
 import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class BuiltInFilmVisualProfilesTest {
+    @Test
+    fun biscoitoRecipeResolvesVersionedOpticalCharacter() {
+        val recipe = CaptureRecipe(CameraBodyId("body-helia"), LensId("lens-biscoito-32"), FilmStockId("film-apricot-noon"))
+        val profile = assertNotNull(BuiltInFilmVisualProfiles.resolve(recipe))
+        assertEquals(BuiltInFilmVisualProfiles.SCHEMA_VERSION, profile.schemaVersion)
+        assertEquals(1.0, profile.sharpness)
+        assertEquals("theia.visual-pipeline", BuiltInFilmVisualProfiles.RENDERING_ALGORITHM_ID)
+        assertEquals(1, profile.lensProfileVersion)
+        assertTrue(profile.radialSoftness > 0.0)
+        assertTrue(profile.chromaticAberration > 0.0)
+        assertTrue(profile.opticalFlare > 0.0)
+        assertTrue(profile.vignette > 0.0)
+        assertTrue(profile.distortion > 0.0)
+    }
+
+    @Test
+    fun anUnknownLensProfileVersionCannotSilentlyResolveToCurrentOptics() {
+        val recipe = CaptureRecipe(
+            CameraBodyId("body-helia"), LensId("lens-biscoito-32"), FilmStockId("film-apricot-noon"),
+            lensProfileVersion = 2,
+        )
+        assertNull(BuiltInFilmVisualProfiles.resolve(recipe))
+    }
+
+    @Test
+    fun anUnknownRenderingSchemaCannotSilentlyUseTheCurrentAlgorithm() {
+        val recipe = CaptureRecipe(
+            CameraBodyId("body-helia"), LensId("lens-biscoito-32"), FilmStockId("film-apricot-noon"),
+            renderingSchemaVersion = 2,
+        )
+        assertNull(BuiltInFilmVisualProfiles.resolve(recipe))
+    }
+
+    @Test
+    fun renderingSchemaSupportIsExplicitAndVersionOneRemainsRegistered() {
+        assertTrue(BuiltInFilmVisualProfiles.supportsRenderingSchemaVersion(BuiltInFilmVisualProfiles.RENDERING_SCHEMA_V1))
+        assertTrue(BuiltInFilmVisualProfiles.supportsRenderingSchemaVersion(1))
+        assertTrue(!BuiltInFilmVisualProfiles.supportsRenderingSchemaVersion(2))
+    }
+
     @Test
     fun everyBuiltInFilmHasOneStableVersionedProfile() {
         val catalogIds = BuiltInEquipmentCatalog.filmStocks().map { it.id }.toSet()

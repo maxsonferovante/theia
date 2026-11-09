@@ -5,14 +5,15 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -24,13 +25,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import app.theia.android.R
 import java.util.Locale
@@ -44,6 +48,7 @@ fun HorizonLevelOverlay(modifier: Modifier = Modifier) {
     var yaw by remember { mutableStateOf(0f) }
     var pitch by remember { mutableStateOf(0f) }
     var roll by remember { mutableStateOf(0f) }
+    var detailsExpanded by remember { mutableStateOf(false) }
 
     DisposableEffect(sensorManager, sensor) {
         if (sensor != null) {
@@ -84,19 +89,40 @@ fun HorizonLevelOverlay(modifier: Modifier = Modifier) {
         String.format(Locale.getDefault(), "%.1f", pitch),
         String.format(Locale.getDefault(), "%.1f", roll),
     )
-    val description = "${stringResource(R.string.camera_horizon_level)}. $axes"
+    val levelLabel = stringResource(R.string.camera_horizon_level)
+    val actionLabel = stringResource(
+        if (detailsExpanded) R.string.camera_horizon_hide_values else R.string.camera_horizon_show_values,
+    )
+    val detailsState = stringResource(
+        if (detailsExpanded) R.string.camera_horizon_values_shown else R.string.camera_horizon_values_hidden,
+    )
+    val shape = RoundedCornerShape(50)
     Surface(
-        modifier.widthIn(max = 340.dp).semantics { contentDescription = description },
+        modifier
+            .widthIn(max = 260.dp)
+            .clickable(onClickLabel = actionLabel, role = Role.Button) { detailsExpanded = !detailsExpanded }
+            .semantics {
+                contentDescription = if (detailsExpanded) "$levelLabel. $axes" else levelLabel
+                stateDescription = detailsState
+            },
         color = Color(0xCC182344),
-        shape = RoundedCornerShape(12.dp),
+        shape = shape,
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(stringResource(R.string.camera_horizon_level), color = Color(0xFFEAAE35), style = MaterialTheme.typography.labelMedium)
-            Canvas(Modifier.fillMaxWidth().height(18.dp).padding(horizontal = 18.dp).graphicsLayer { rotationZ = roll }) {
+        Column(
+            Modifier.animateContentSize().padding(horizontal = 12.dp, vertical = 7.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Canvas(Modifier.width(136.dp).height(16.dp).graphicsLayer { rotationZ = roll }) {
                 drawLine(Color(0xFFE7D7B7), start = androidx.compose.ui.geometry.Offset(0f, size.height / 2), end = androidx.compose.ui.geometry.Offset(size.width, size.height / 2), strokeWidth = 2.dp.toPx())
                 drawCircle(Color(0xFFEAAE35), radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2))
             }
-            Text(axes, color = Color(0xFFE7D7B7), style = MaterialTheme.typography.labelSmall)
+            AnimatedVisibility(visible = detailsExpanded) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(levelLabel, color = Color(0xFFEAAE35), style = MaterialTheme.typography.labelMedium)
+                    Text(axes, color = Color(0xFFE7D7B7), style = MaterialTheme.typography.labelSmall)
+                }
+            }
         }
     }
 }

@@ -20,7 +20,12 @@ func embeddingRecipeMetadata(
         "id": recipe.stableID,
         "body": recipe.cameraBodyID,
         "lens": recipe.lensID,
+        "lens_profile_version": recipe.lensProfileVersion,
+        "rendering_algorithm_id": "theia.visual-pipeline",
+        "rendering_schema_version": recipe.renderingSchemaVersion,
         "film": recipe.filmStockID,
+        "filter_applied": false,
+        "filter_status": "original_unfiltered",
     ]
     guard let encoded = try? JSONSerialization.data(withJSONObject: compactRecipe),
           let json = String(data: encoded, encoding: .utf8) else { return data }

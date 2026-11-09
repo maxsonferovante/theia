@@ -71,6 +71,7 @@ object BuiltInEquipmentCatalog : EquipmentCatalogPort, CatalogPresentationPort {
         lens("tele", "Farpoint 85", "A compact telephoto lens that compresses scenes and separates distant details.", "A tall violet barrel with stepped rings and a small silver distance scale."),
         lens("soft-focus", "Cloud 70", "A diffusion lens with a gauzy highlight bloom and low-contrast transitions.", "A cream barrel with a translucent lilac filter ring and cloud etching."),
         lens("tilt", "Prism Tilt", "A selective-focus lens with a narrow plane of detail and playful edge softness.", "A faceted bronze barrel with a violet prism window and offset tilt markings."),
+        lens("biscoito-32", "Biscoito 32", "A compact lens with a clear center, soft edges and a nostalgic vignette.", "A slim dark round lens with a cream ring and small violet glass center."),
     )
 
     val filmEntries: List<CatalogEntry<FilmStock>> = listOf(

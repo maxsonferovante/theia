@@ -106,6 +106,16 @@ struct CatalogArtworkView: View {
     private func drawLens(context: inout GraphicsContext, size: CGSize, seed: UInt32, colors: [Color]) {
         let w = size.width
         let h = size.height
+        if artworkKey == "artwork.lens.biscoito-32" {
+            let center = CGPoint(x: w * 0.5, y: h * 0.56)
+            let radius = h * 0.31
+            fillCircle(context: &context, center: center, radius: radius * 1.12, color: colors[4])
+            strokeCircle(context: &context, center: center, radius: radius, color: colors[2], lineWidth: h * 0.055)
+            fillCircle(context: &context, center: center, radius: radius * 0.72, color: colors[1])
+            fillCircle(context: &context, center: center, radius: radius * 0.48, color: colors[6])
+            fillCircle(context: &context, center: CGPoint(x: center.x - radius * 0.18, y: center.y - radius * 0.2), radius: radius * 0.12, color: colors[2].opacity(0.8))
+            return
+        }
         let centerX = w * (0.5 + (stableFraction(seed, 20) - 0.5) * 0.12)
         let centerY = h * 0.57
         let barrelWidth = w * (0.28 + stableFraction(seed, 21) * 0.1)
