@@ -1,6 +1,134 @@
 import Foundation
 import Photos
 
+enum TheiaPhotoDestination: Sendable {
+    case originals
+    case revealed
+
+    var albumTitle: String {
+        switch self {
+        case .originals: "Originais"
+        case .revealed: "Reveladas"
+        }
+    }
+}
+
+/// Saves each new photo in an album nested under a single Théia Photos folder.
+/// The serial queue prevents simultaneous first saves from creating duplicate collections.
+enum TheiaPhotoLibraryOrganizer {
+    private static let folderTitle = "Théia"
+    private static let queue = DispatchQueue(label: "app.theia.photo-library-organizer")
+
+    static func requestReadWriteAuthorization() async -> PHAuthorizationStatus {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        guard status == .notDetermined else { return status }
+        return await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+    }
+
+    static func hasReadWriteAccess(_ status: PHAuthorizationStatus) -> Bool {
+        status == .authorized || status == .limited
+    }
+
+    static func save(
+        data: Data,
+        originalFilename: String?,
+        destination: TheiaPhotoDestination
+    ) async throws -> String {
+        try await Task.detached(priority: .utility) {
+            try queue.sync {
+                try saveSynchronously(data: data, originalFilename: originalFilename, destination: destination)
+            }
+        }.value
+    }
+
+    private static func saveSynchronously(
+        data: Data,
+        originalFilename: String?,
+        destination: TheiaPhotoDestination
+    ) throws -> String {
+        let library = PHPhotoLibrary.shared()
+        let folder = try ensureFolder(in: library)
+        let album = try ensureAlbum(destination.albumTitle, in: folder, library: library)
+        var assetIdentifier: String?
+        var assetWasAddedToAlbum = false
+
+        try library.performChangesAndWait {
+            let assetRequest = PHAssetCreationRequest.forAsset()
+            let options = PHAssetResourceCreationOptions()
+            options.originalFilename = originalFilename
+            assetRequest.addResource(with: .photo, data: data, options: options)
+            guard let placeholder = assetRequest.placeholderForCreatedAsset,
+                  let albumRequest = PHAssetCollectionChangeRequest(for: album) else { return }
+            albumRequest.addAssets([placeholder] as NSArray)
+            assetIdentifier = placeholder.localIdentifier
+            assetWasAddedToAlbum = true
+        }
+
+        guard assetWasAddedToAlbum, let assetIdentifier else {
+            throw OrganizerError.assetCouldNotBeAdded
+        }
+        return assetIdentifier
+    }
+
+    private static func ensureFolder(in library: PHPhotoLibrary) throws -> PHCollectionList {
+        if let existing = findFolder() { return existing }
+
+        try library.performChangesAndWait {
+            _ = PHCollectionListChangeRequest.creationRequestForCollectionList(withTitle: folderTitle)
+        }
+
+        guard let created = findFolder() else { throw OrganizerError.folderCouldNotBeCreated }
+        return created
+    }
+
+    private static func ensureAlbum(
+        _ title: String,
+        in folder: PHCollectionList,
+        library: PHPhotoLibrary
+    ) throws -> PHAssetCollection {
+        if let existing = findAlbum(title, in: folder) { return existing }
+        var albumWasAddedToFolder = false
+
+        try library.performChangesAndWait {
+            let albumRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: title)
+            guard let folderRequest = PHCollectionListChangeRequest(for: folder) else { return }
+            folderRequest.addChildCollections([albumRequest.placeholderForCreatedAssetCollection] as NSArray)
+            albumWasAddedToFolder = true
+        }
+
+        guard albumWasAddedToFolder, let created = findAlbum(title, in: folder) else {
+            throw OrganizerError.albumCouldNotBeCreated
+        }
+        return created
+    }
+
+    private static func findFolder() -> PHCollectionList? {
+        let collections = PHCollectionList.fetchTopLevelUserCollections(with: nil)
+        for index in 0..<collections.count {
+            guard let folder = collections.object(at: index) as? PHCollectionList,
+                  folder.localizedTitle == folderTitle else { continue }
+            return folder
+        }
+        return nil
+    }
+
+    private static func findAlbum(_ title: String, in folder: PHCollectionList) -> PHAssetCollection? {
+        let children = PHCollection.fetchCollections(in: folder, options: nil)
+        for index in 0..<children.count {
+            guard let album = children.object(at: index) as? PHAssetCollection,
+                  album.localizedTitle == title else { continue }
+            return album
+        }
+        return nil
+    }
+
+    private enum OrganizerError: Error {
+        case folderCouldNotBeCreated
+        case albumCouldNotBeCreated
+        case assetCouldNotBeAdded
+    }
+}
+
 enum AlbumMediaKind: String, Codable, CaseIterable, Sendable {
     case photo
     case video

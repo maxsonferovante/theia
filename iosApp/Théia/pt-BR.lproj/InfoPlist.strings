@@ -1,1 +1,2 @@
-"NSPhotoLibraryUsageDescription" = "Théia acessa suas fotos recentes somente quando você pede para ver a foto mais recente ou compartilhar uma captura.";
+"NSPhotoLibraryAddUsageDescription" = "Théia salva originais e cópias reveladas em álbuns separados na sua fototeca.";
+"NSPhotoLibraryUsageDescription" = "Théia organiza originais e cópias reveladas em álbuns dentro de uma pasta Théia e acessa os itens vinculados quando você os abre ou gerencia.";

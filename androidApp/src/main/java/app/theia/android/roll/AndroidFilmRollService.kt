@@ -7,9 +7,9 @@ import android.graphics.BitmapFactory
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.MediaStore
 import app.theia.android.album.AlbumMediaKind
+import app.theia.android.album.TheiaGalleryFolders
 import app.theia.android.album.AlbumMetadataRepository
 import app.theia.android.album.AlbumPhoto
 import app.theia.domain.catalog.BuiltInFilmVisualProfiles
@@ -374,10 +374,10 @@ private class MediaStorePhotoLibrary(context: Context) : MediaLibraryPort {
             put(MediaStore.Images.Media.DISPLAY_NAME, "Theia_revealed_${System.currentTimeMillis()}.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Théia")
+                put(MediaStore.Images.Media.RELATIVE_PATH, TheiaGalleryFolders.relativePath(TheiaGalleryFolders.REVEALED))
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             } else {
-                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Théia")
+                val dir = TheiaGalleryFolders.legacyDirectory(TheiaGalleryFolders.REVEALED)
                 check(dir.exists() || dir.mkdirs()) { "Could not create Théia gallery folder" }
                 put(MediaStore.Images.Media.DATA, File(dir, "Theia_revealed_${System.currentTimeMillis()}.jpg").absolutePath)
             }

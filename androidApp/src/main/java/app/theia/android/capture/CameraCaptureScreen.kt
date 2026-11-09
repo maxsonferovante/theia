@@ -7,9 +7,9 @@ import android.content.pm.PackageManager
 import android.media.MediaActionSound
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.MediaStore
 import android.util.Range
+import app.theia.android.album.TheiaGalleryFolders
 import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -828,12 +828,11 @@ private fun publishOriginal(context: Context, displayName: String, temporaryFile
         put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
         put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Théia")
+            put(MediaStore.Images.Media.RELATIVE_PATH, TheiaGalleryFolders.relativePath(TheiaGalleryFolders.ORIGINALS))
             put(MediaStore.Images.Media.IS_PENDING, 1)
         } else {
             put(MediaStore.Images.Media.TITLE, displayName.removeSuffix(".jpg"))
-            val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-            val targetDirectory = java.io.File(pictures, "Théia")
+            val targetDirectory = TheiaGalleryFolders.legacyDirectory(TheiaGalleryFolders.ORIGINALS)
             check(targetDirectory.exists() || targetDirectory.mkdirs()) {
                 context.getString(R.string.camera_gallery_unavailable)
             }

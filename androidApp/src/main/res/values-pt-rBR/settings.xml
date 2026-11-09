@@ -32,7 +32,7 @@
     <string name="settings_camera_permission">Câmera</string>
     <string name="settings_camera_permission_description">Necessária apenas para mostrar o visor e capturar fotos.</string>
     <string name="settings_photos_permission">Fotos e mídia</string>
-    <string name="settings_photos_permission_description">Permite que o Théia salve originais e cópias reveladas na sua galeria.</string>
+    <string name="settings_photos_permission_description">Salva originais em Théia/Originais e cópias reveladas em Théia/Reveladas na sua galeria.</string>
     <string name="settings_microphone_permission">Microfone</string>
     <string name="settings_microphone_permission_description">Necessário apenas para gravar vídeos com áudio.</string>
     <string name="settings_location_permission">Localização</string>

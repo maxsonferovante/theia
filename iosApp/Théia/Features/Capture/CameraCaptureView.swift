@@ -608,7 +608,9 @@ private final class CameraCaptureModel: ObservableObject {
         countdownCancelled = false
         do {
             try await requestPhotoLibraryAccess()
-            guard PHPhotoLibrary.authorizationStatus(for: .addOnly) == .authorized || PHPhotoLibrary.authorizationStatus(for: .addOnly) == .limited else {
+            guard TheiaPhotoLibraryOrganizer.hasReadWriteAccess(
+                PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            ) else {
                 throw CameraError.photoPermissionDenied
             }
             if timerSeconds > 0 {
@@ -744,38 +746,28 @@ private final class CameraCaptureModel: ObservableObject {
     }
 
     private func requestPhotoLibraryAccess() async throws {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        if status == .authorized || status == .limited { return }
-        if status == .notDetermined {
-            let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-            if newStatus == .authorized || newStatus == .limited { return }
+        let status = await TheiaPhotoLibraryOrganizer.requestReadWriteAuthorization()
+        guard TheiaPhotoLibraryOrganizer.hasReadWriteAccess(status) else {
+            throw CameraError.photoPermissionDenied
         }
-        throw CameraError.photoPermissionDenied
     }
 
     private func savePhoto(_ data: Data, recipe: NativeCaptureRecipe, geotagMetadata: LocalGeotagMetadata?) async {
         isSaving = true
         defer { isSaving = false }
         do {
-            let identifier = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-                var placeholderIdentifier: String?
-                PHPhotoLibrary.shared().performChanges {
-                    let request = PHAssetCreationRequest.forAsset()
-                    request.addResource(with: .photo, data: data, options: nil)
-                    placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
-                } completionHandler: { success, error in
-                    if let error { continuation.resume(throwing: error) }
-                    else if success, let placeholderIdentifier { continuation.resume(returning: placeholderIdentifier) }
-                    else { continuation.resume(throwing: CameraError.saveFailed) }
-                }
-            }
+            let identifier = try await TheiaPhotoLibraryOrganizer.save(
+                data: data,
+                originalFilename: nil,
+                destination: .originals
+            )
             savedRecord = NativeCaptureRecord(
                 localIdentifier: identifier,
                 recipe: recipe,
                 capturedAt: Date(),
                 geotagMetadata: geotagMetadata
             )
-        } catch { present(error) }
+        } catch { present(CameraError.saveFailed) }
     }
 
     private func present(_ error: Error) {

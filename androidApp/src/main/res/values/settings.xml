@@ -32,7 +32,7 @@
     <string name="settings_camera_permission">Camera</string>
     <string name="settings_camera_permission_description">Needed only to show the viewfinder and capture photos.</string>
     <string name="settings_photos_permission">Photos and media</string>
-    <string name="settings_photos_permission_description">Lets Théia save originals and developed copies to your gallery.</string>
+    <string name="settings_photos_permission_description">Saves originals to Théia/Originais and developed copies to Théia/Reveladas in your gallery.</string>
     <string name="settings_microphone_permission">Microphone</string>
     <string name="settings_microphone_permission_description">Needed only when you record video with audio.</string>
     <string name="settings_location_permission">Location</string>

@@ -294,26 +294,20 @@ enum NativeFilmImageProcessor {
 
     /// Creates a distinct Photos asset and returns its local identifier. The source asset is never changed or deleted.
     static func saveDevelopedCopy(_ artifact: DevelopedImageArtifact) async throws -> String {
-        try await requestAddOnlyAuthorizationIfNeeded()
-        let imageData = artifact.data
+        let status = await TheiaPhotoLibraryOrganizer.requestReadWriteAuthorization()
+        guard TheiaPhotoLibraryOrganizer.hasReadWriteAccess(status) else {
+            throw NativeFilmImageProcessorError.photoLibraryAddDenied
+        }
         let filename = "Theia-\(artifact.metadata.filmProfileID)-developed.jpg"
-
-        return try await Task.detached(priority: .utility) {
-            var createdIdentifier: String?
-            do {
-                try PHPhotoLibrary.shared().performChangesAndWait {
-                    let request = PHAssetCreationRequest.forAsset()
-                    let options = PHAssetResourceCreationOptions()
-                    options.originalFilename = filename
-                    request.addResource(with: .photo, data: imageData, options: options)
-                    createdIdentifier = request.placeholderForCreatedAsset?.localIdentifier
-                }
-            } catch {
-                throw NativeFilmImageProcessorError.photosSaveFailed
-            }
-            guard let createdIdentifier else { throw NativeFilmImageProcessorError.photosSaveFailed }
-            return createdIdentifier
-        }.value
+        do {
+            return try await TheiaPhotoLibraryOrganizer.save(
+                data: artifact.data,
+                originalFilename: filename,
+                destination: .revealed
+            )
+        } catch {
+            throw NativeFilmImageProcessorError.photosSaveFailed
+        }
     }
 
     private static func originalData(localIdentifier: String) async throws -> Data {
@@ -343,16 +337,6 @@ enum NativeFilmImageProcessor {
                 }
             }
         }
-    }
-
-    private static func requestAddOnlyAuthorizationIfNeeded() async throws {
-        let current = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        if current == .authorized { return }
-        guard current == .notDetermined else { throw NativeFilmImageProcessorError.photoLibraryAddDenied }
-        let requested = await withCheckedContinuation { continuation in
-            PHPhotoLibrary.requestAuthorization(for: .addOnly) { continuation.resume(returning: $0) }
-        }
-        guard requested == .authorized else { throw NativeFilmImageProcessorError.photoLibraryAddDenied }
     }
 
     private static func renderOriginalData(

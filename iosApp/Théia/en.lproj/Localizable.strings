@@ -236,7 +236,7 @@
 "settings_camera_permission" = "Camera";
 "settings_camera_permission_description" = "Needed only to show the viewfinder and capture photos.";
 "settings_photos_permission" = "Photos and media";
-"settings_photos_permission_description" = "Lets Théia save originals and developed copies to your gallery.";
+"settings_photos_permission_description" = "Saves originals to Théia/Originais and developed copies to Théia/Reveladas in Photos.";
 "settings_microphone_permission" = "Microphone";
 "settings_microphone_permission_description" = "Needed only when you record video with audio.";
 "settings_location_permission" = "Location";
@@ -295,7 +295,7 @@
 "capture_open_settings" = "Open Settings";
 "capture_error_camera_unavailable" = "No compatible camera is available on this device.";
 "capture_error_session_unavailable" = "The camera is not ready. Close and reopen the capture screen, then try again.";
-"capture_error_photo_permission" = "Allow Théia to add photos in Settings to save this original.";
+"capture_error_photo_permission" = "Allow Théia to access Photos so it can organize this original in the Théia folder.";
 "capture_error_photo_save" = "The photo could not be saved. Your capture was not added to the gallery. Try again.";
 "capture_error_photo_prepare" = "The camera could not prepare this photo. Try capturing again.";
 "video_title" = "Video";
@@ -413,7 +413,7 @@
 "roll_error_duplicate" = "This photo is already assigned to the roll.";
 "roll_error_capture_missing" = "This photo does not belong to the roll.";
 "roll_error_not_full" = "Fill the roll before developing, or choose early development.";
-"roll_error_photos_permission" = "Allow Théia to add developed copies to Photos.";
+"roll_error_photos_permission" = "Allow Théia to access Photos so it can organize developed copies in the Théia folder.";
 "roll_error_asset" = "The original Photos item is unavailable on this device.";
 "roll_error_save" = "The developed photo could not be saved.";
 "roll_fixed_recipe" = "Fixed recipe";
